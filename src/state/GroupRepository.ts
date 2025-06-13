@@ -5,12 +5,12 @@ import { RequestGroup } from '../models/RequestGroup';
  */
 export class GroupRepository {
   private groups = new Map<string, RequestGroup>();
-
-  add(group: RequestGroup): RequestGroup {
+  add(group: RequestGroup,): RequestGroup {
     this.groups.set(group.key, group);
+    console.log('GroupRepository initialized');
     return group;
   }
-
+  
   get(key: string): RequestGroup | undefined {
     return this.groups.get(key);
   }

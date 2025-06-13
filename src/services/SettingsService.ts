@@ -1,3 +1,5 @@
+import { eventBus, MetricsEventType } from '../events/EventBus';
+
 /**
  * Minimal settings/configuration service
  */
@@ -12,8 +14,16 @@ export class SettingsService {
     return this.settings[key];
   }
 
-  set(key: string, value: any): void {
+  set(key: string, value: any, changedBy: string = 'system'): void {
     this.settings[key] = value;
+    eventBus.publish({
+      type: MetricsEventType.CONFIGURATION_CHANGED,
+      payload: {
+        changedBy,
+        changes: { [key]: value }
+      },
+      timestamp: new Date()
+    });
   }
 }
 
