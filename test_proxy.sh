@@ -18,6 +18,12 @@ curl -s -X POST http://localhost:3000/proxy \
   -H "x-org: test-org" \
   -d '{"foo":"bar"}'; echo
 
+curl -s -X POST http://localhost:11007/proxy \                                                                                                             ✔  5s  
+  -H "Content-Type: application/json" \
+  -H "x-url: https://blackadam-backend.getnitro.co.in/error" \
+  -H "x-group-by: test-group" \
+  -H "x-org: test-org" \
+  -d '{"foo":"bar"}'; echo
 
 echo "Summary:"
 curl -s http://localhost:3000/metrics/summary | jq; echo
