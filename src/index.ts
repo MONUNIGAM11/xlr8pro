@@ -10,6 +10,7 @@ import { RequestAcceptor } from './services/RequestAcceptor';
 // import { metricsService } from './services/MetricsService'; // Remove old metrics service import
 import { bootstrapMetricsSystem } from './metrics/bootstrap'; // Import new bootstrap function
 import { eventBus } from './events/EventBus'; // Import eventBus (assuming this is the correct path)
+import { RetryOrchestrator } from './services/RetryOrchestrator';
 
 
 const app = express();
@@ -26,10 +27,19 @@ const throttleManager = new ThrottleManager({
 const proxyExecutor = new ProxyExecutor({
   requestRepository: requestRepository, 
 });
+
+const retryOrchestrator = new RetryOrchestrator({
+  requestRepository,
+  proxyExecutor,
+  groupRepository,
+  settings
+});
+
 const requestAcceptor = new RequestAcceptor({
   requestRepository,
   throttleManager,
   proxyExecutor,
+  // retryOrchestrator
 });
 
 // app.use(express.json());

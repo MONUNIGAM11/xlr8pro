@@ -1,5 +1,5 @@
 import http from 'http';
-import { StatusClassifier, StatusCategory } from './StatusClassifier.js';
+import { StatusClassifier, StatusCategory } from './StatusClassifier';
 
 /**
  * Retry strategy configuration

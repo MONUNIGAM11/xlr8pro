@@ -1,8 +1,9 @@
-import { Request, RequestStatus } from '../models/Request.js';
-import { eventBus, EventType } from '../events/EventBus.js';
-import { RetryContext, retryService } from './RetryService.js';
-import { StatusClassifier } from './StatusClassifier.js';
-import { RequestGroup } from '../models/RequestGroup.js';
+import { Request, RequestStatus } from '../models/Request';
+import { eventBus, MetricsEventType } from '../events/EventBus';
+import { RetryContext, retryService } from './RetryService';
+import { StatusClassifier } from './StatusClassifier';
+import { RequestGroup } from '../models/RequestGroup';
+import { SettingsService } from './SettingsService';
 
 /**
  * Dependencies for RetryOrchestrator
@@ -21,11 +22,7 @@ export interface RetryOrchestratorDependencies {
     recordFailure(groupKey: string): void;
     get(groupKey: string): RequestGroup | null;
   };
-  settings: {
-    getCooldownDuration(groupKey: string): number;
-    getFailureThreshold(groupKey: string): number;
-    getMaxAttempts(orgId: string): number;
-  };
+  settings: SettingsService;
   deadLetterService?: {
     addToDeadLetter(request: Request): Promise<any>;
   };
@@ -56,8 +53,8 @@ export class RetryOrchestrator {
     this.deadLetterService = dependencies.deadLetterService;
     
     // Listen for relevant events
-    eventBus.subscribe(EventType.RESPONSE_RECEIVED, this.handleResponse.bind(this));
-    eventBus.subscribe(EventType.SHUTDOWN_INITIATED, () => {
+    eventBus.subscribe(MetricsEventType.RESPONSE_RECEIVED, this.handleResponse.bind(this));
+    eventBus.subscribe(MetricsEventType.SHUTDOWN_INITIATED, () => {
       this.isShuttingDown = true;
       this.cancelAllRetries();
     });
@@ -204,7 +201,7 @@ export class RetryOrchestrator {
     
     // Publish retry scheduled event
     eventBus.publish({
-      type: EventType.RETRY_SCHEDULED,
+      type: MetricsEventType.RETRY_SCHEDULED,
       requestId: request.id,
       groupKey: request.groupKey,
       orgId: request.orgId,
@@ -277,7 +274,7 @@ export class RetryOrchestrator {
       
       // Only publish event for retry consideration if not a persistent network error
       eventBus.publish({
-        type: EventType.RESPONSE_RECEIVED,
+        type: MetricsEventType.RESPONSE_RECEIVED,
         requestId: request.id,
         groupKey: request.groupKey,
         orgId: request.orgId,
@@ -319,7 +316,7 @@ export class RetryOrchestrator {
           
           // Publish dead letter added event
           eventBus.publish({
-            type: EventType.DEADLETTER_ADDED,
+            type: MetricsEventType.DEADLETTER_ADDED,
             requestId: request.id,
             groupKey: request.groupKey,
             orgId: request.orgId,
@@ -347,7 +344,7 @@ export class RetryOrchestrator {
     
     // Publish completion event
     eventBus.publish({
-      type: success ? EventType.REQUEST_COMPLETED : EventType.REQUEST_FAILED,
+      type: success ? MetricsEventType.REQUEST_COMPLETED : MetricsEventType.REQUEST_FAILED,
       requestId: request.id,
       groupKey: request.groupKey,
       orgId: request.orgId,

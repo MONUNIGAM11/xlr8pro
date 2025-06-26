@@ -104,12 +104,13 @@ export class ProxyExecutor {
     try {
       // Execute the request
       const result = await this.sendRequest(request);
+      console.log(`ProxyExecutor: Request ${request.id} completed with status ${result.statusCode}`);
       const responseTime = Date.now() - startTime;
 
       // Update request with result
       request.responseStatus = result.statusCode;
       request.responseTime = responseTime;
-      request.completedAt = new Date(); // Mark as completed on successful response
+      request.completedAt = new Date(); 
       this.requestRepository.update(request);
 
       // Publish response received event
@@ -140,7 +141,7 @@ export class ProxyExecutor {
       // It might be more appropriate to have a separate EventType.REQUEST_FAILED or similar,
       // but I'll keep the original type for now.
       eventBus.publish({
-        type: MetricsEventType.RESPONSE_RECEIVED, // Or consider EventType.REQUEST_FAILED
+        type: MetricsEventType.REQUEST_FAILED, // Or consider EventType.REQUEST_FAILED
         requestId: request.id,
         groupKey: request.groupKey,
         orgId: request.orgId,

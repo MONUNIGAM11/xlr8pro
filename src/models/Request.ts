@@ -7,6 +7,7 @@ export enum RequestStatus {
   WAITING_RETRY = 'waiting_retry',
   COMPLETED = 'completed',
   FAILED = 'failed',
+  DEADLETTERED = 'deadlettered'
 }
 
 export interface RequestData {

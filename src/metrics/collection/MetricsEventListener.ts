@@ -131,7 +131,7 @@ export class MetricsEventListener {
   
   private handleRequestReceived(event: Event): void {
     const { requestId, groupKey, orgId } = event;
-    
+    console.log('Handling REQUEST_RECEIVED event:', event);
     if (!requestId || !groupKey) {
       console.warn('Missing required fields in REQUEST_RECEIVED event');
       return;
