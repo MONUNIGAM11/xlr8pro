@@ -139,6 +139,7 @@ export class EventBus {
    * @returns {Function} Unsubscribe function
    */
   subscribe(eventType: MetricsEventType, handler: EventHandler): () => void {
+    console.log(eventType, 'eventType in EventBus subscribe');
     if (!this.subscribers.has(eventType)) {
       this.subscribers.set(eventType, new Set());
     }

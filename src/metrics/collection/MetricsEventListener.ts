@@ -12,37 +12,38 @@ import {
   TrafficMetrics,
   ConnectionMetrics
 } from '../definitions/MetricDefinitions';
+import { eventBus,MetricsEventType } from '../../events/EventBus';
 
 /**
  * Event types that the metrics system can listen to
  */
-export enum MetricsEventType {
-  // Request lifecycle events
-  REQUEST_RECEIVED = 'REQUEST_RECEIVED',
-  REQUEST_VALIDATED = 'REQUEST_VALIDATED',
-  REQUEST_ACCEPTED = 'REQUEST_ACCEPTED',
-  REQUEST_FORWARDED = 'REQUEST_FORWARDED',
-  RESPONSE_RECEIVED = 'RESPONSE_RECEIVED',
-  RETRY_SCHEDULED = 'RETRY_SCHEDULED',
-  REQUEST_COMPLETED = 'REQUEST_COMPLETED',
-  REQUEST_FAILED = 'REQUEST_FAILED',
-  // Throttling and cooldown events
-  COOLDOWN_ACTIVATED = 'COOLDOWN_ACTIVATED',
-  COOLDOWN_EXPIRED = 'COOLDOWN_EXPIRED',
-  RATE_LIMITED = 'RATE_LIMITED',
-  CAPACITY_UPDATED = 'CAPACITY_UPDATED',
-  // Circuit breaker events
-  CIRCUIT_OPENED = 'CIRCUIT_OPENED',
-  CIRCUIT_CLOSED = 'CIRCUIT_CLOSED',
-  // Future events
-  DEADLETTER_ADDED = 'DEADLETTER_ADDED',
-  SHUTDOWN_INITIATED = 'SHUTDOWN_INITIATED',
-  REQUEST_MALFORMED = 'REQUEST_MALFORMED',
-  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
-  REQUEST_DELAYED = 'REQUEST_DELAYED',
-  RESPONSE_SENT = 'RESPONSE_SENT'
+// export enum MetricsEventType {
+//   // Request lifecycle events
+//   REQUEST_RECEIVED = 'REQUEST_RECEIVED',
+//   REQUEST_VALIDATED = 'REQUEST_VALIDATED',
+//   REQUEST_ACCEPTED = 'REQUEST_ACCEPTED',
+//   REQUEST_FORWARDED = 'REQUEST_FORWARDED',
+//   RESPONSE_RECEIVED = 'RESPONSE_RECEIVED',
+//   RETRY_SCHEDULED = 'RETRY_SCHEDULED',
+//   REQUEST_COMPLETED = 'REQUEST_COMPLETED',
+//   REQUEST_FAILED = 'REQUEST_FAILED',
+//   // Throttling and cooldown events
+//   COOLDOWN_ACTIVATED = 'COOLDOWN_ACTIVATED',
+//   COOLDOWN_EXPIRED = 'COOLDOWN_EXPIRED',
+//   RATE_LIMITED = 'RATE_LIMITED',
+//   CAPACITY_UPDATED = 'CAPACITY_UPDATED',
+//   // Circuit breaker events
+//   CIRCUIT_OPENED = 'CIRCUIT_OPENED',
+//   CIRCUIT_CLOSED = 'CIRCUIT_CLOSED',
+//   // Future events
+//   DEADLETTER_ADDED = 'DEADLETTER_ADDED',
+//   SHUTDOWN_INITIATED = 'SHUTDOWN_INITIATED',
+//   REQUEST_MALFORMED = 'REQUEST_MALFORMED',
+//   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
+//   REQUEST_DELAYED = 'REQUEST_DELAYED',
+//   RESPONSE_SENT = 'RESPONSE_SENT'
 
-}
+// }
 
 
 /**
@@ -114,6 +115,8 @@ export class MetricsEventListener {
    */
   private subscribe(eventType: MetricsEventType, handler: (event: Event) => void): void {
     this.handlersByType.set(eventType, handler);
+
+    console.log(`Subscribing to event in metricEventListners: ${eventType}`);
     this.eventBus.subscribe(eventType, handler);
   }
   

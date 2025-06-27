@@ -55,13 +55,26 @@ export class MemoryMetricsStore implements MetricsRepository {
    * @param dimensions Optional dimensions for the metric
    * @returns Current counter value
    */
+  // getCounter(name: string, dimensions?: Record<string, string>): any {
+  //   if (!this.counters.has(name)) {
+  //     return 0;
+  //   }
+  //   var res = this.counters.get(name);
+  //   // var res = this.counters.get(name)!.get(dimensions || {});
+  //   return res;
+  // }
   getCounter(name: string, dimensions?: Record<string, string>): number {
-    if (!this.counters.has(name)) {
-      return 0;
-    }
-    
-    return this.counters.get(name)!.get(dimensions || {});
+  if (!this.counters.has(name)) {
+    return 0;
   }
+  const counter = this.counters.get(name)!;
+  if (dimensions && Object.keys(dimensions).length > 0) {
+    // Return the value for the specific dimension
+    return counter.get(dimensions);
+  }
+  // Return the sum of all dimensioned counters for this metric
+  return counter.getAll().reduce((sum, item) => sum + item.value, 0);
+}
   
   // #endregion
   
@@ -433,9 +446,13 @@ export class MemoryMetricsStore implements MetricsRepository {
     const cooldownGroupsDetails: Array<{key: string, remainingTime: number, reason?: string, failureCount?: number}> = [];
     
     // Calculate success rate
+    // const totalRequests = this.getCounter('request.received')?.counters?.size || 0;
+
     const totalRequests = this.getCounter('request.received');
-    const successfulRequests = this.getCounter('request.completed');
-    const failedRequests = this.getCounter('request.failed');
+    const successfulRequests = this.getCounter('request.completed')
+    const failedRequests = this.getCounter('request.failed')
+    const groupRequests = this.getCounter('request.received', { groupKey: 'test-group' });
+    console.log('groupRequests', groupRequests);
     
     let successRate = 0;
     if (totalRequests > 0) {
@@ -459,6 +476,7 @@ export class MemoryMetricsStore implements MetricsRepository {
         systemLoad,
         capacityUtilization
       },
+      groupRequests,
       successRate: `${successRate.toFixed(2)}%`,
       cooldownGroups: cooldownGroupsDetails
     };

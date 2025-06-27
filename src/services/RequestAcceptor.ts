@@ -1,9 +1,9 @@
 import http from 'http';
 import { URL } from 'url';
 import { Request, RequestStatus } from '../models/Request';
-import { eventBus } from '../events/EventBus';
+import { eventBus, MetricsEventType } from '../events/EventBus';
 import { ThrottleReason, ThrottleResult } from './ThrottleManager';
-import { MetricsEventType } from '../metrics/collection/MetricsEventListener';
+// import { MetricsEventType } from '../metrics/collection/MetricsEventListener';
 
 /**
  * Result of header validation
