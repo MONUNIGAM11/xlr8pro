@@ -204,19 +204,19 @@ export class MetricsService implements MetricsRepository {
     const groups: any[] = [];
     
     // Extract unique group keys from counters
-    const groupKeys = this.getUniqueGroupKeys();
+    const dimensionslist = await this.getUniqueDemension();
     
     // Process each group
-    for (const groupKey of groupKeys) {
-      const orgId = groupKey.split(':')[0];
+    for (const dimensions of dimensionslist) {
+      // const orgId = groupKey.split(':')[0];
       
       // Get basic counts
-      const totalRequests = this.getCounter('request.received', { groupKey });
-      const successfulRequests = this.getCounter('request.completed', { groupKey });
-      const failedRequests = this.getCounter('request.failed', { groupKey });
-      const retryAttempts = this.getCounter('retry.attempts', { groupKey });
-      const cooldownActivations = this.getCounter('cooldown.activated', { groupKey });
-      const maxRetryReached = this.getCounter('retry.max_reached', { groupKey });
+      const totalRequests = this.getCounter('request.received', dimensions );
+      const successfulRequests = this.getCounter('request.completed', dimensions );
+      const failedRequests = this.getCounter('request.failed',  dimensions );
+      const retryAttempts = this.getCounter('retry.attempts', dimensions );
+      const cooldownActivations = this.getCounter('cooldown.activated', dimensions );
+      const maxRetryReached = this.getCounter('retry.max_reached', dimensions);
       
       // Calculate success rate
       const successRate = totalRequests > 0 
@@ -224,22 +224,22 @@ export class MetricsService implements MetricsRepository {
         : '0.00%';
       
       // Get response time stats
-      const responseTimeStats = this.getTimingStats('request.response_time', { groupKey });
+      const responseTimeStats = this.getTimingStats('request.response_time', dimensions );
       const avgResponseTime = `${Math.round(responseTimeStats.avg)}ms`;
       
       // Get current status
-      const inCooldown = this.getGauge('throttle.cooldown_remaining', { groupKey }) > 0;
-      const cooldownRemaining = Math.round(this.getGauge('throttle.cooldown_remaining', { groupKey }));
-      const activeRequests = Math.round(this.getGauge('system.group_active_requests', { groupKey }));
+      const inCooldown = this.getGauge('throttle.cooldown_remaining', dimensions) > 0;
+      const cooldownRemaining = Math.round(this.getGauge('throttle.cooldown_remaining',  dimensions ));
+      const activeRequests = Math.round(this.getGauge('system.group_active_requests', dimensions ));
       
       // Get queue stats
-      const queueLength = Math.round(this.getGauge('queue.length', { groupKey }));
-      const queueDepth = Math.round(this.getGauge('queue.depth', { groupKey }));
-      const queueDelayed = Math.round(this.getGauge('queue.delayed', { groupKey }));
-      const queueWaitingRetry = Math.round(this.getGauge('queue.waiting_retry', { groupKey }));
+      const queueLength = Math.round(this.getGauge('queue.length',  dimensions ));
+      const queueDepth = Math.round(this.getGauge('queue.depth',  dimensions ));
+      const queueDelayed = Math.round(this.getGauge('queue.delayed', dimensions));
+      const queueWaitingRetry = Math.round(this.getGauge('queue.waiting_retry',  dimensions ));
       
       // Get throttling stats
-      const totalThrottled = this.getCounter('throttle.rejected', { groupKey });
+      const totalThrottled = this.getCounter('throttle.rejected',  dimensions );
       
       // Get throttle reasons (if available)
       const reasonDistribution: Record<string, number> = {};
@@ -247,7 +247,7 @@ export class MetricsService implements MetricsRepository {
       
       if (reasonMetrics) {
         reasonMetrics.getAll()
-          .filter((m: any) => m.dimensions.groupKey === groupKey && m.dimensions.reason)
+          .filter((m: any) => m.dimensions.groupKey === dimensions && m.dimensions.reason)
           .forEach((m: any) => {
             const reason = m.dimensions.reason;
             reasonDistribution[reason] = (reasonDistribution[reason] || 0) + m.value;
@@ -260,7 +260,7 @@ export class MetricsService implements MetricsRepository {
        if (userAgentMetric) {
          try {
             userAgentMetric.getAll()
-              .filter((m: any) => m.dimensions.groupKey === groupKey && m.dimensions.userAgent)
+              .filter((m: any) => m.dimensions.groupKey === dimensions && m.dimensions.userAgent)
               .forEach((m: any) => {
                 const agent = m.dimensions.userAgent;
                 userAgentCounts[agent] = (userAgentCounts[agent] || 0) + m.value;
@@ -271,14 +271,14 @@ export class MetricsService implements MetricsRepository {
        }
 
        // Get Connection Reuse Count for this group
-       const connectionReuseCount = this.getCounter(ConnectionMetrics.CONNECTION_REUSE_TOTAL.name, { groupKey });
+       const connectionReuseCount = this.getCounter(ConnectionMetrics.CONNECTION_REUSE_TOTAL.name, { groupKey: dimensions });
       
       // Add group data
       groups.push({
-        key: groupKey,
+        key: dimensions,
         current: {
-          success: Math.round(this.getCounter('request.completed', { groupKey, timeframe: '5m' })),
-          failure: Math.round(this.getCounter('request.failed', { groupKey, timeframe: '5m' })),
+          success: Math.round(this.getCounter('request.completed', { groupKey: dimensions, timeframe: '5m' })),
+          failure: Math.round(this.getCounter('request.failed', { groupKey: dimensions, timeframe: '5m' })),
           inCooldown,
           cooldownRemaining,
           activeRequests
@@ -609,12 +609,8 @@ export class MetricsService implements MetricsRepository {
    * Get unique group keys from available metrics
    * @private
    */
-  private getUniqueGroupKeys(): string[] {
+  private getUniqueDemension(): any {
     // This method gets unique group keys from the in-memory store, which is fine
-    let groupKeys: string[] = [];
-    this.memoryStore.getGroupMetrics().then(metrics => {
-      groupKeys = metrics.groupKeys;
-    });
-    return groupKeys;
+    return this.memoryStore.getUniqueDimensions();
   }
 } 

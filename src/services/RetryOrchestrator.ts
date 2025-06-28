@@ -124,7 +124,7 @@ export class RetryOrchestrator {
     
     
     // Check if we should retry
-    const shouldPerformRetry = !error || this.shouldRetry(request, retryContext);
+    const shouldPerformRetry = this.shouldRetry(request, retryContext);
     if (statusCode >= 200 && statusCode < 300) {
       // Success
       console.log(` >>>>>> RetryOrchestrator: success for request ${request.id}: ${statusCode}`);

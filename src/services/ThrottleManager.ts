@@ -65,13 +65,13 @@ export class ThrottleManager {
     this.settings = dependencies.settings;
     
     // Initialize with default capacity
-    this.currentCapacity = 100;
+    // this.currentCapacity = 100000;
     
-    // Periodically update capacity
-    this.capacityUpdateTimer = setInterval(
-      () => this.updateSystemCapacity(), 
-      this.capacityCheckInterval
-    );
+    // // Periodically update capacity
+    // this.capacityUpdateTimer = setInterval(
+    //   () => this.updateSystemCapacity(), 
+    //   this.capacityCheckInterval
+    // );
     
     // Register for shutdown events
     eventBus.subscribe(MetricsEventType.SHUTDOWN_INITIATED, () => {
@@ -90,11 +90,57 @@ export class ThrottleManager {
    * @returns {ThrottleResult} Whether the request can be accepted
    */
   canAcceptRequest(request: Request): ThrottleResult {
+    // const { groupKey } = request;
+    
+    
+    // return { accepted: true, reason: undefined };
+
     const { groupKey } = request;
     
+    // Check if group is in cooldown
+    if (this.groupRepository.isInCooldown(groupKey)) {
+      // Still track but allow the request, with a warning
+      console.warn(`ThrottleManager: Group ${groupKey} is in cooldown - allowing anyway`);
+      const delayMs = this.groupRepository.getRemainingCooldownMs(groupKey);
+      return { accepted: true, reason: ThrottleReason.GROUP_COOLDOWN_BUT_ALLOWED, delayExecution: true, delayMs: delayMs };
+    }
     
-    return { accepted: true, reason: undefined };
+    // Check group-specific limit
+    const groupLimit = this.settings.getMaxRequestsPerGroup(groupKey);
+    const groupCurrentCount = this.requestRepository.getActiveRequestCountForGroup(groupKey);
+    
+    if (groupCurrentCount >= groupLimit) {
+      // Allow if under 150% capacity
+      const overloadLimit = Math.floor(groupLimit * 1.5);
+      if (groupCurrentCount < overloadLimit) {
+        console.warn(`ThrottleManager: Group ${groupKey} exceeding limit (${groupCurrentCount}/${groupLimit}) - allowing anyway`);
+        let delayMs = this.groupRepository.getRemainingCooldownMs(groupKey);
+        if (delayMs === 0) {
+          delayMs = 1000;
+        }
+        return { accepted: true, reason: ThrottleReason.GROUP_LIMIT_EXCEEDED_BUT_ALLOWED, delayExecution: true, delayMs: delayMs };
+      }
+      else {
+        return { accepted: false, reason: ThrottleReason.GROUP_LIMIT_SEVERELY_EXCEEDED, delayExecution: false, delayMs: 0 };
+      }
+    }
+    
+    // Check global capacity
+    const totalRequests = this.requestRepository.getTotalActiveRequestCount();
+    const overloadCapacity = Math.floor(this.currentCapacity * 1.5);
+    
+    if (totalRequests >= this.currentCapacity) {
+      if (totalRequests < overloadCapacity) {
+        console.warn(`ThrottleManager: System exceeding capacity (${totalRequests}/${this.currentCapacity}) - allowing anyway`);
+        return { accepted: true, reason: ThrottleReason.GLOBAL_CAPACITY_EXCEEDED_BUT_ALLOWED };
+      } else {
+        return { accepted: false, reason: ThrottleReason.GLOBAL_CAPACITY_SEVERELY_EXCEEDED };
+      }
+    }
+    
+    return { accepted: true };
   }
+  
 
   /**
    * Update system capacity based on resource usage

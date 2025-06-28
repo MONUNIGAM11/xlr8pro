@@ -473,24 +473,24 @@ export class MemoryMetricsStore implements MetricsRepository {
     const groups: any[] = [];
     
     // Extract unique group keys from counters
-    const groupKeys = new Set<string>();
-    
+    // const groupKeys = new Set<string>();
+    const dimensionslist: Set<Record<string, string>> = new Set();      
     // Collect group keys from request counters
     this.counters.get('request.received')?.getAll().forEach(counter => {
-      const groupKey = counter.dimensions.groupKey;
+      const groupKey = counter.dimensions;
       if (groupKey) {
-        groupKeys.add(groupKey);
+        dimensionslist.add(groupKey);
       }
     });
     
     // Process each group
-    for (const groupKey of groupKeys) {
+    for (const demension of dimensionslist) {
       // Get basic counts
-      const totalRequests = this.getCounter('request.received', { groupKey });
-      const successfulRequests = this.getCounter('request.completed', { groupKey });
-      const failedRequests = this.getCounter('request.failed', { groupKey });
-      const retryAttempts = this.getCounter('retry.attempts', { groupKey });
-      const cooldownActivations = this.getCounter('cooldown.activated', { groupKey });
+      const totalRequests = this.getCounter('request.received',  demension);
+      const successfulRequests = this.getCounter('request.completed', demension );
+      const failedRequests = this.getCounter('request.failed', demension );
+      const retryAttempts = this.getCounter('retry.attempts',  demension );
+      const cooldownActivations = this.getCounter('cooldown.activated', demension );
       
       // Calculate success rate
       const successRate = totalRequests > 0 
@@ -498,12 +498,12 @@ export class MemoryMetricsStore implements MetricsRepository {
         : '0.00%';
       
       // Get response time stats
-      const responseTimeStats = this.getTimingStats('request.response_time', { groupKey });
+      const responseTimeStats = this.getTimingStats('request.response_time',  demension );
       const avgResponseTime = `${Math.round(responseTimeStats.avg)}ms`;
       
       // Add group data
       groups.push({
-        key: groupKey,
+        key: demension,
         current: {
           // Placeholder - would come from real group repository
           activeRequests: 0,
@@ -828,6 +828,19 @@ export class MemoryMetricsStore implements MetricsRepository {
       }
     }
   }
-  
+  async getUniqueDimensions(): Promise<Record<string, string>[]>  {
+    
+    const dimensionslist: Record<string, string>[] = [];
+      
+      // Collect group keys from request counters
+      this.counters.get('request.received')?.getAll().forEach(counter => {
+        const groupKey = counter.dimensions;
+        if (groupKey) {
+          dimensionslist.push(groupKey);
+        }
+      });
+    return dimensionslist;
+  }
   // #endregion
+  
 } 
