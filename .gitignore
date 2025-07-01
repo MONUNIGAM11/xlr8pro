@@ -1,3 +1,14 @@
 node_modules/
 dist/
 .env
+
+# Compiled TypeScript files
+*.js
+*.d.ts
+*.js.map
+
+# But keep the compiled files we actually need for production
+!jest.config.js
+!start-dev.sh
+!test_proxy.sh
+!validate-flow.sh

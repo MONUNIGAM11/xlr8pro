@@ -1,8 +1,9 @@
-import { MetricsRepository } from '../interfaces/MetricsRepository';
+import { MetricsRepository, MetricDefinition } from '../interfaces/MetricsRepository';
 import { TimePoint } from '../interfaces/TimePoint';
 import { CircularBuffer } from './CircularBuffer';
 import { DimensionalCounter } from './DimensionalCounter';
 import { Histogram } from './Histogram';
+import { MetricValidator } from '../utils/MetricValidator';
 
 /**
  * In-memory metrics store that implements the MetricsRepository interface
@@ -16,10 +17,6 @@ export class MemoryMetricsStore implements MetricsRepository {
   private histograms: Map<string, Map<string, Histogram>> = new Map();
   private timeSeries: Map<string, Map<string, CircularBuffer<TimePoint>>> = new Map();
   
-  // Legacy compatibility structures
-  private requestTimings: Record<string, { startTime: number, requestGroupKey: string, orgId?: string }> = {};
-  private retryTracker: Map<string, { originalStatusCode: number, retriedAt: number }> = new Map();
-  
   /**
    * Create a new memory metrics store
    * @param timeSeriesCapacity Maximum number of points to keep per time series (default: 1440 = 24h at 1m resolution)
@@ -29,6 +26,85 @@ export class MemoryMetricsStore implements MetricsRepository {
     private timeSeriesCapacity: number = 1440,
     private histogramSamples: number = 1000
   ) {}
+  
+  // #region Enhanced Dimension-Aware Methods
+  
+  /**
+   * Record a metric with dimension validation
+   * @param metricDef The metric definition to validate against
+   * @param value The value to record
+   * @param dimensions The dimensions to use
+   */
+  recordMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void {
+    MetricValidator.safeRecord(metricDef, dimensions, (sanitizedDimensions) => {
+      // Route to appropriate method based on metric type
+      switch (metricDef.type) {
+        case 'counter':
+          this.incrementCounter(metricDef.name, value, sanitizedDimensions);
+          break;
+        case 'gauge':
+          this.recordGauge(metricDef.name, value, sanitizedDimensions);
+          break;
+        case 'timer':
+          this.recordTiming(metricDef.name, value, sanitizedDimensions);
+          break;
+        case 'histogram':
+          this.recordHistogram(metricDef.name, value, sanitizedDimensions);
+          break;
+        default:
+          console.warn(`Unknown metric type: ${metricDef.type} for metric: ${metricDef.name}`);
+          // Default to counter for unknown types
+          this.incrementCounter(metricDef.name, value, sanitizedDimensions);
+      }
+    });
+  }
+  
+  /**
+   * Record a timing metric with dimension validation
+   * @param metricDef The metric definition to validate against
+   * @param durationMs The duration in milliseconds
+   * @param dimensions The dimensions to use
+   */
+  recordTimingMetric(metricDef: MetricDefinition, durationMs: number, dimensions: Record<string, string>): void {
+    MetricValidator.safeRecord(metricDef, dimensions, (sanitizedDimensions) => {
+      if (metricDef.type !== 'timer') {
+        console.warn(`Recording timing for non-timer metric: ${metricDef.name} (${metricDef.type})`);
+      }
+      this.recordTiming(metricDef.name, durationMs, sanitizedDimensions);
+    });
+  }
+  
+  /**
+   * Record a histogram metric with dimension validation
+   * @param metricDef The metric definition to validate against
+   * @param value The value to record
+   * @param dimensions The dimensions to use
+   */
+  recordHistogramMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void {
+    MetricValidator.safeRecord(metricDef, dimensions, (sanitizedDimensions) => {
+      if (metricDef.type !== 'histogram') {
+        console.warn(`Recording histogram for non-histogram metric: ${metricDef.name} (${metricDef.type})`);
+      }
+      this.recordHistogram(metricDef.name, value, sanitizedDimensions);
+    });
+  }
+  
+  /**
+   * Record a gauge metric with dimension validation
+   * @param metricDef The metric definition to validate against
+   * @param value The value to record
+   * @param dimensions The dimensions to use
+   */
+  recordGaugeMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void {
+    MetricValidator.safeRecord(metricDef, dimensions, (sanitizedDimensions) => {
+      if (metricDef.type !== 'gauge') {
+        console.warn(`Recording gauge for non-gauge metric: ${metricDef.name} (${metricDef.type})`);
+      }
+      this.recordGauge(metricDef.name, value, sanitizedDimensions);
+    });
+  }
+  
+  // #endregion
   
   // #region Counter Methods
   
@@ -275,130 +351,6 @@ export class MemoryMetricsStore implements MetricsRepository {
     this.timeSeries.get(name)!.get(dimensionKey)!.add({
       timestamp: Date.now(),
       value
-    });
-  }
-  
-  // #endregion
-  
-  // #region Legacy Compatibility Methods
-  
-  /**
-   * Record the start of a request (legacy compatibility)
-   * @param requestId Unique request ID
-   * @param requestGroupKey Group key for the request
-   */
-  recordRequestStart(requestId: string, requestGroupKey: string): void {
-    // Extract organization ID if present in the group key
-    const orgId = requestGroupKey.split(':')[0];
-    
-    // Record request timing info
-    this.requestTimings[requestId] = {
-      startTime: Date.now(),
-      requestGroupKey,
-      orgId
-    };
-    
-    // Increment total requests counter with dimensions
-    this.incrementCounter('request.received', 1, { 
-      groupKey: requestGroupKey,
-      orgId
-    });
-  }
-  
-  /**
-   * Record the completion of a request (legacy compatibility)
-   * @param requestId Unique request ID
-   * @param statusCode HTTP status code
-   */
-  recordRequestCompletion(requestId: string, statusCode: number): void {
-    // Skip if we don't have timing data
-    if (!this.requestTimings[requestId]) {
-      return;
-    }
-    
-    const timing = this.requestTimings[requestId];
-    const requestGroupKey = timing.requestGroupKey;
-    const orgId = timing.orgId;
-    const responseTime = Date.now() - timing.startTime;
-    
-    // Update status code counts
-    this.incrementCounter('response.status', 1, { 
-      statusCode: statusCode.toString(),
-      groupKey: requestGroupKey,
-      orgId
-    });
-    
-    // Update success/failure counts
-    if (statusCode >= 200 && statusCode < 300) {
-      this.incrementCounter('request.completed', 1, { 
-        groupKey: requestGroupKey,
-        orgId
-      });
-    } else {
-      this.incrementCounter('request.failed', 1, { 
-        groupKey: requestGroupKey,
-        statusCode: statusCode.toString(),
-        orgId
-      });
-    }
-    
-    // Record response time
-    this.recordTiming('request.response_time', responseTime, { 
-      groupKey: requestGroupKey,
-      statusCode: statusCode.toString(),
-      orgId
-    });
-    
-    // Clean up timing data
-    delete this.requestTimings[requestId];
-  }
-  
-  /**
-   * Record a retry attempt (legacy compatibility)
-   * @param requestId Unique request ID
-   * @param requestGroupKey Group key for the request
-   * @param attemptNumber Retry attempt number
-   */
-  recordRetryAttempt(requestId: string, requestGroupKey: string, attemptNumber: number): void {
-    // Extract organization ID if present in the group key
-    const orgId = requestGroupKey.split(':')[0];
-    
-    // Increment retry counter with dimensions
-    this.incrementCounter('retry.attempts', 1, { 
-      groupKey: requestGroupKey,
-      attemptNumber: attemptNumber.toString(),
-      orgId
-    });
-    
-    // Mark this request as being retried
-    this.retryTracker.set(requestId, {
-      originalStatusCode: 0,
-      retriedAt: Date.now()
-    });
-  }
-  
-  /**
-   * Record a cooldown activation (legacy compatibility)
-   * @param requestGroupKey Group key for the request
-   * @param duration Cooldown duration in ms
-   * @param reason Optional reason for cooldown
-   */
-  recordCooldownActivation(requestGroupKey: string, duration: number, reason?: string): void {
-    // Extract organization ID if present in the group key
-    const orgId = requestGroupKey.split(':')[0];
-    
-    // Increment cooldown counter
-    this.incrementCounter('cooldown.activated', 1, { 
-      groupKey: requestGroupKey,
-      reason: reason || 'unknown',
-      orgId
-    });
-    
-    // Record cooldown duration
-    this.recordHistogram('cooldown.duration', duration, {
-      groupKey: requestGroupKey,
-      reason: reason || 'unknown',
-      orgId
     });
   }
   

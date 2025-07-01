@@ -1,10 +1,26 @@
 import { TimePoint } from './TimePoint';
 
 /**
+ * Metric definition interface
+ */
+export interface MetricDefinition {
+  name: string;
+  type: string;
+  description: string;
+  dimensions: string[];
+}
+
+/**
  * Core interface for metrics storage and retrieval
  */
 export interface MetricsRepository {
-  // Counter methods
+  // Enhanced dimension-aware methods
+  recordMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void;
+  recordTimingMetric(metricDef: MetricDefinition, durationMs: number, dimensions: Record<string, string>): void;
+  recordHistogramMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void;
+  recordGaugeMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void;
+  
+  //counter methods (for backward compatibility)
   incrementCounter(name: string, value: number, dimensions?: Record<string, string>): void;
   getCounter(name: string, dimensions?: Record<string, string>): number;
   
@@ -38,12 +54,6 @@ export interface MetricsRepository {
   
   // Time series methods
   getTimeSeries(name: string, dimensions: Record<string, string>, start: Date, end: Date): Promise<TimePoint[]>;
-  
-  // // Legacy compatibility methods
-  recordRequestStart(requestId: string, requestGroupKey: string): void;
-  recordRequestCompletion(requestId: string, statusCode: number): void;
-  recordRetryAttempt(requestId: string, requestGroupKey: string, attemptNumber: number): void;
-  recordCooldownActivation(requestGroupKey: string, duration: number, reason?: string): void;
   
   // API methods for dashboards
   getSummaryMetrics(): Promise<Record<string, any>>;

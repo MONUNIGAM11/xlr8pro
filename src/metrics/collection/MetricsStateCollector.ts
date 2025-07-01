@@ -6,8 +6,10 @@ import {
   SystemMetrics, 
   QueueMetrics, 
   ThrottleMetrics,
-  DimensionKey
+  DimensionKey,
+  MetricType
 } from '../definitions/MetricDefinitions';
+import { MetricValidator, MetricDefinition } from '../utils/MetricValidator';
 import os from 'os';
 
 /**
@@ -64,6 +66,30 @@ export class MetricsStateCollector {
       groupService?: GroupService;
     }
   ) {}
+  
+  // #region Helper Methods for Dimension-Aware Recording
+  
+  /**
+   * Record a gauge metric with dimension validation
+   */
+  private recordGauge(metricDef: any, value: number, dimensions: Record<string, string> = {}): void {
+    MetricValidator.safeRecord(metricDef, dimensions, (sanitizedDimensions) => {
+      switch (metricDef.type) {
+        case MetricType.GAUGE:
+          if (this.metricsRepository.recordGaugeMetric) {
+            this.metricsRepository.recordGaugeMetric(metricDef, value, sanitizedDimensions);
+          } else {
+            this.metricsRepository.recordGauge(metricDef.name, value, sanitizedDimensions);
+          }
+          break;
+        default:
+          console.warn(`Trying to record gauge for non-gauge metric: ${metricDef.name} (${metricDef.type})`);
+          this.metricsRepository.recordGauge(metricDef.name, value, sanitizedDimensions);
+      }
+    });
+  }
+  
+  // #endregion
   
   /**
    * Start collecting metrics at regular intervals
@@ -132,7 +158,7 @@ export class MetricsStateCollector {
       
       // Record active group count
       const activeGroupCount = groupService.getActiveGroupCount();
-      this.metricsRepository.recordGauge(SystemMetrics.ACTIVE_GROUPS.name, activeGroupCount);
+      this.recordGauge(SystemMetrics.ACTIVE_GROUPS, activeGroupCount, {});
       
       // Record per-group metrics
       const activeGroups = groupService.getActiveGroups();
@@ -143,7 +169,7 @@ export class MetricsStateCollector {
         
         // Record active requests for this group
         const activeRequests = groupService.getActiveGroupRequests(groupKey);
-        this.metricsRepository.recordGauge(SystemMetrics.GROUP_ACTIVE_REQUESTS.name, activeRequests, {
+        this.recordGauge(SystemMetrics.GROUP_ACTIVE_REQUESTS, activeRequests, {
           [DimensionKey.GROUP_KEY]: groupKey,
           [DimensionKey.ORG_ID]: orgId
         });
@@ -160,26 +186,26 @@ export class MetricsStateCollector {
   private collectOsMetrics(): void {
     // CPU load average (1, 5, 15 minute averages)
     const loadAvg = os.loadavg();
-    this.metricsRepository.recordGauge(SystemMetrics.CPU_LOAD_1M.name, loadAvg[0]);
-    this.metricsRepository.recordGauge(SystemMetrics.CPU_LOAD_5M.name, loadAvg[1]);
-    this.metricsRepository.recordGauge(SystemMetrics.CPU_LOAD_15M.name, loadAvg[2]);
+    this.recordGauge(SystemMetrics.CPU_LOAD_1M, loadAvg[0], {});
+    this.recordGauge(SystemMetrics.CPU_LOAD_5M, loadAvg[1], {});
+    this.recordGauge(SystemMetrics.CPU_LOAD_15M, loadAvg[2], {});
     
     // Memory usage
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     const usedMem = totalMem - freeMem;
     
-    this.metricsRepository.recordGauge(SystemMetrics.MEMORY_TOTAL.name, totalMem);
-    this.metricsRepository.recordGauge(SystemMetrics.MEMORY_FREE.name, freeMem);
-    this.metricsRepository.recordGauge(SystemMetrics.MEMORY_USED.name, usedMem);
-    this.metricsRepository.recordGauge(SystemMetrics.MEMORY_USAGE_PCT.name, (usedMem / totalMem) * 100);
+    this.recordGauge(SystemMetrics.MEMORY_TOTAL, totalMem, {});
+    this.recordGauge(SystemMetrics.MEMORY_FREE, freeMem, {});
+    this.recordGauge(SystemMetrics.MEMORY_USED, usedMem, {});
+    this.recordGauge(SystemMetrics.MEMORY_USAGE_PCT, (usedMem / totalMem) * 100, {});
     
     // Process memory usage (resident set size)
     if (process.memoryUsage) {
       const { rss, heapTotal, heapUsed } = process.memoryUsage();
-      this.metricsRepository.recordGauge(SystemMetrics.PROCESS_MEMORY_RSS.name, rss);
-      this.metricsRepository.recordGauge(SystemMetrics.PROCESS_MEMORY_HEAP_TOTAL.name, heapTotal);
-      this.metricsRepository.recordGauge(SystemMetrics.PROCESS_MEMORY_HEAP_USED.name, heapUsed);
+      this.recordGauge(SystemMetrics.PROCESS_MEMORY_RSS, rss, {});
+      this.recordGauge(SystemMetrics.PROCESS_MEMORY_HEAP_TOTAL, heapTotal, {});
+      this.recordGauge(SystemMetrics.PROCESS_MEMORY_HEAP_USED, heapUsed, {});
     }
   }
   
@@ -194,14 +220,14 @@ export class MetricsStateCollector {
     const currentCapacity = capacityService.getCurrentCapacity();
     const activeRequests = capacityService.getActiveRequestCount();
     
-    this.metricsRepository.recordGauge(SystemMetrics.MAX_CAPACITY.name, maxCapacity);
-    this.metricsRepository.recordGauge(SystemMetrics.CAPACITY.name, currentCapacity);
-    this.metricsRepository.recordGauge(SystemMetrics.ACTIVE_REQUESTS.name, activeRequests);
+    this.recordGauge(SystemMetrics.MAX_CAPACITY, maxCapacity, {});
+    this.recordGauge(SystemMetrics.CAPACITY, currentCapacity, {});
+    this.recordGauge(SystemMetrics.ACTIVE_REQUESTS, activeRequests, {});
     
     // Calculate capacity utilization percentage
     if (maxCapacity > 0) {
       const utilizationPct = (currentCapacity / maxCapacity) * 100;
-      this.metricsRepository.recordGauge(SystemMetrics.CAPACITY_UTILIZATION.name, utilizationPct);
+      this.recordGauge(SystemMetrics.CAPACITY_UTILIZATION, utilizationPct, {});
     }
   }
   
@@ -216,9 +242,9 @@ export class MetricsStateCollector {
     const queueCapacity = queueService.getQueueCapacity();
     const queueUtilization = queueService.getQueueUtilization();
     
-    this.metricsRepository.recordGauge(QueueMetrics.QUEUE_LENGTH.name, queueLength);
-    this.metricsRepository.recordGauge(QueueMetrics.QUEUE_CAPACITY.name, queueCapacity);
-    this.metricsRepository.recordGauge(QueueMetrics.QUEUE_UTILIZATION.name, queueUtilization * 100);
+    this.recordGauge(QueueMetrics.QUEUE_LENGTH, queueLength, {});
+    this.recordGauge(QueueMetrics.QUEUE_CAPACITY, queueCapacity, {});
+    this.recordGauge(QueueMetrics.QUEUE_UTILIZATION, queueUtilization * 100, {});
   }
   
   /**
@@ -229,7 +255,7 @@ export class MetricsStateCollector {
     if (!cooldownService) return;
     
     const cooldownCount = cooldownService.getCooldownGroupCount();
-    this.metricsRepository.recordGauge(SystemMetrics.COOLDOWN_GROUPS.name, cooldownCount);
+    this.recordGauge(SystemMetrics.COOLDOWN_GROUPS, cooldownCount, {});
     
     // Record per-group cooldown metrics
     const cooldownGroups = cooldownService.getCooldownGroupKeys();
@@ -244,7 +270,7 @@ export class MetricsStateCollector {
       // Record cooldown remaining time
       const remainingMs = cooldownService.getGroupCooldownRemaining(groupKey);
       
-      this.metricsRepository.recordGauge(ThrottleMetrics.COOLDOWN_REMAINING.name, remainingMs, {
+      this.recordGauge(ThrottleMetrics.COOLDOWN_REMAINING, remainingMs, {
         [DimensionKey.GROUP_KEY]: groupKey,
         [DimensionKey.ORG_ID]: orgId,
         [DimensionKey.COOLDOWN_REASON]: reason

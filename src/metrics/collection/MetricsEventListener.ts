@@ -10,9 +10,11 @@ import {
   DeadLetterMetrics,
   StatusCategory,
   TrafficMetrics,
-  ConnectionMetrics
+  ConnectionMetrics,
+  MetricType
 } from '../definitions/MetricDefinitions';
 import { EventType } from '../../events/EventBus';
+import { MetricValidator, MetricDefinition } from '../utils/MetricValidator';
 
 /**
  * Event types that the metrics system can listen to
@@ -130,6 +132,87 @@ export class MetricsEventListener {
   
   // #region Event Handlers
   
+  /**
+   * Record a counter metric with dimension validation
+   */
+  private recordCounter(metricDef: any, value: number, dimensions: Record<string, string>): void {
+    MetricValidator.safeRecord(metricDef, dimensions, (sanitizedDimensions) => {
+      switch (metricDef.type) {
+        case MetricType.COUNTER:
+          // Use enhanced method if available, fallback to legacy
+          if (this.metricsRepository.recordMetric) {
+            this.metricsRepository.recordMetric(metricDef, value, sanitizedDimensions);
+          } else {
+            this.metricsRepository.incrementCounter(metricDef.name, value, sanitizedDimensions);
+          }
+          break;
+        default:
+          console.warn(`Trying to record counter for non-counter metric: ${metricDef.name} (${metricDef.type})`);
+          this.metricsRepository.incrementCounter(metricDef.name, value, sanitizedDimensions);
+      }
+    });
+  }
+  
+  /**
+   * Record a timing metric with dimension validation
+   */
+  private recordTiming(metricDef: any, durationMs: number, dimensions: Record<string, string>): void {
+    MetricValidator.safeRecord(metricDef, dimensions, (sanitizedDimensions) => {
+      switch (metricDef.type) {
+        case MetricType.TIMER:
+          if (this.metricsRepository.recordTimingMetric) {
+            this.metricsRepository.recordTimingMetric(metricDef, durationMs, sanitizedDimensions);
+          } else {
+            this.metricsRepository.recordTiming(metricDef.name, durationMs, sanitizedDimensions);
+          }
+          break;
+        default:
+          console.warn(`Trying to record timing for non-timer metric: ${metricDef.name} (${metricDef.type})`);
+          this.metricsRepository.recordTiming(metricDef.name, durationMs, sanitizedDimensions);
+      }
+    });
+  }
+  
+  /**
+   * Record a histogram metric with dimension validation
+   */
+  private recordHistogram(metricDef: any, value: number, dimensions: Record<string, string>): void {
+    MetricValidator.safeRecord(metricDef, dimensions, (sanitizedDimensions) => {
+      switch (metricDef.type) {
+        case MetricType.HISTOGRAM:
+          if (this.metricsRepository.recordHistogramMetric) {
+            this.metricsRepository.recordHistogramMetric(metricDef, value, sanitizedDimensions);
+          } else {
+            this.metricsRepository.recordHistogram(metricDef.name, value, sanitizedDimensions);
+          }
+          break;
+        default:
+          console.warn(`Trying to record histogram for non-histogram metric: ${metricDef.name} (${metricDef.type})`);
+          this.metricsRepository.recordHistogram(metricDef.name, value, sanitizedDimensions);
+      }
+    });
+  }
+  
+  /**
+   * Record a gauge metric with dimension validation
+   */
+  private recordGauge(metricDef: any, value: number, dimensions: Record<string, string>): void {
+    MetricValidator.safeRecord(metricDef, dimensions, (sanitizedDimensions) => {
+      switch (metricDef.type) {
+        case MetricType.GAUGE:
+          if (this.metricsRepository.recordGaugeMetric) {
+            this.metricsRepository.recordGaugeMetric(metricDef, value, sanitizedDimensions);
+          } else {
+            this.metricsRepository.recordGauge(metricDef.name, value, sanitizedDimensions);
+          }
+          break;
+        default:
+          console.warn(`Trying to record gauge for non-gauge metric: ${metricDef.name} (${metricDef.type})`);
+          this.metricsRepository.recordGauge(metricDef.name, value, sanitizedDimensions);
+      }
+    });
+  }
+  
   private handleRequestReceived(event: Event): void {
     const { requestId, groupKey, orgId } = event;
     console.log('Handling REQUEST_RECEIVED event:', event);
@@ -138,14 +221,11 @@ export class MetricsEventListener {
       return;
     }
     
-    // Record using metrics repository
-    this.metricsRepository.incrementCounter(RequestMetrics.RECEIVED.name, 1, { 
+    // Record using dimension-aware method - validates against RequestMetrics.RECEIVED.dimensions
+    this.recordCounter(RequestMetrics.RECEIVED, 1, { 
       [DimensionKey.GROUP_KEY]: groupKey, 
       [DimensionKey.ORG_ID]: orgId || ''
     });
-    
-    // // Also record using legacy method for compatibility
-    this.metricsRepository.recordRequestStart(requestId, groupKey);
   }
   
   private handleRequestValidated(event: Event): void {
@@ -156,7 +236,8 @@ export class MetricsEventListener {
       return;
     }
     
-    this.metricsRepository.incrementCounter(RequestMetrics.VALIDATED.name, 1, { 
+    // Use dimension-aware method - validates against RequestMetrics.VALIDATED.dimensions
+    this.recordCounter(RequestMetrics.VALIDATED, 1, { 
       [DimensionKey.GROUP_KEY]: groupKey, 
       [DimensionKey.ORG_ID]: orgId || ''
     });
@@ -170,16 +251,16 @@ export class MetricsEventListener {
       return;
     }
     
-    // Record that the request was accepted
-    this.metricsRepository.incrementCounter(RequestMetrics.ACCEPTED.name, 1, { 
+    // Record that the request was accepted - validates dimensions
+    this.recordCounter(RequestMetrics.ACCEPTED, 1, { 
       [DimensionKey.GROUP_KEY]: groupKey, 
       [DimensionKey.ORG_ID]: orgId || ''
     });
     
-    // Record queue time if available
+    // Record queue time if available - validates dimensions
     const queueTime = payload?.queueTime;
     if (queueTime !== undefined) {
-      this.metricsRepository.recordTiming(RequestMetrics.QUEUE_TIME.name, queueTime, { 
+      this.recordTiming(RequestMetrics.QUEUE_TIME, queueTime, { 
         [DimensionKey.GROUP_KEY]: groupKey, 
         [DimensionKey.ORG_ID]: orgId || ''
       });
@@ -197,18 +278,22 @@ export class MetricsEventListener {
     // Extract hostname if available
     const hostname = payload?.hostname || '';
     
-    this.metricsRepository.incrementCounter(RequestMetrics.FORWARDED.name, 1, { 
+    // Use dimension-aware method - validates against RequestMetrics.FORWARDED.dimensions
+    // RequestMetrics.FORWARDED expects: [ORG_ID, GROUP_KEY, HOSTNAME]
+    this.recordCounter(RequestMetrics.FORWARDED, 1, { 
       [DimensionKey.GROUP_KEY]: groupKey, 
       [DimensionKey.ORG_ID]: orgId || '',
       [DimensionKey.HOSTNAME]: hostname
     });
     
-    // Track downstream service
+    // Track downstream service - validates against RequestMetrics.DOWNSTREAM_REQUEST.dimensions
     if (hostname) {
-      this.metricsRepository.incrementCounter(RequestMetrics.DOWNSTREAM_REQUEST.name, 1, {
-        [DimensionKey.HOSTNAME]: hostname,
+      this.recordCounter(RequestMetrics.DOWNSTREAM_REQUEST, 1, {
         [DimensionKey.GROUP_KEY]: groupKey,
-        [DimensionKey.ORG_ID]: orgId || ''
+        [DimensionKey.ORG_ID]: orgId || '',
+        // Note: HOSTNAME is not in DOWNSTREAM_REQUEST.dimensions, this will show a warning
+        // but still record the metric for backward compatibility
+        [DimensionKey.HOSTNAME]: hostname
       });
     }
   }
@@ -230,7 +315,7 @@ export class MetricsEventListener {
     const connectionReused = payload?.connectionReused || false; // Extract connectionReused
 
     // Record status code
-    this.metricsRepository.incrementCounter(RequestMetrics.RESPONSE_STATUS.name, 1, {
+    this.recordCounter(RequestMetrics.RESPONSE_STATUS, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || '',
       [DimensionKey.STATUS_CODE]: statusCode.toString(),
@@ -239,7 +324,7 @@ export class MetricsEventListener {
     
     // Record latency using recordTiming (which handles percentiles for Timers)
     if (latencyMs > 0) {
-      this.metricsRepository.recordTiming(RequestMetrics.RESPONSE_TIME.name, latencyMs, {
+      this.recordTiming(RequestMetrics.RESPONSE_TIME, latencyMs, {
         [DimensionKey.GROUP_KEY]: groupKey,
         [DimensionKey.ORG_ID]: orgId || '',
         [DimensionKey.HOSTNAME]: hostname
@@ -248,7 +333,7 @@ export class MetricsEventListener {
     
     // Record downstream service metrics if hostname exists
     if (hostname) {
-      this.metricsRepository.incrementCounter(RequestMetrics.DOWNSTREAM_RESPONSE.name, 1, {
+      this.recordCounter(RequestMetrics.DOWNSTREAM_RESPONSE, 1, {
         [DimensionKey.HOSTNAME]: hostname,
         [DimensionKey.GROUP_KEY]: groupKey,
         [DimensionKey.ORG_ID]: orgId || '',
@@ -258,7 +343,7 @@ export class MetricsEventListener {
     }
 
     // Record User Agent
-    this.metricsRepository.incrementCounter(TrafficMetrics.USER_AGENT_TOTAL.name, 1, {
+    this.recordCounter(TrafficMetrics.USER_AGENT_TOTAL, 1, {
       [DimensionKey.USER_AGENT]: userAgent,
       [DimensionKey.GROUP_KEY]: groupKey, // Include groupKey and orgId dimensions
       [DimensionKey.ORG_ID]: orgId || '',
@@ -266,7 +351,7 @@ export class MetricsEventListener {
 
     // Record Connection Reuse
     if (connectionReused) {
-      this.metricsRepository.incrementCounter(ConnectionMetrics.CONNECTION_REUSE_TOTAL.name, 1, {
+      this.recordCounter(ConnectionMetrics.CONNECTION_REUSE_TOTAL, 1, {
         [DimensionKey.GROUP_KEY]: groupKey, // Include groupKey and orgId dimensions
         [DimensionKey.ORG_ID]: orgId || '',
       });
@@ -287,7 +372,7 @@ export class MetricsEventListener {
     const delayMs = payload?.delayMs || 0;
     
     // Record retry metrics
-    this.metricsRepository.incrementCounter(RetryMetrics.ATTEMPTS.name, 1, {
+    this.recordCounter(RetryMetrics.ATTEMPTS, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || '',
       [DimensionKey.ATTEMPT_NUMBER]: attemptNumber.toString(),
@@ -297,14 +382,11 @@ export class MetricsEventListener {
     });
     
     // Record retry delay time
-    this.metricsRepository.recordHistogram(RetryMetrics.DELAY.name, delayMs, {
+    this.recordHistogram(RetryMetrics.DELAY, delayMs, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || '',
       [DimensionKey.ATTEMPT_NUMBER]: attemptNumber.toString()
     });
-    
-    // Use legacy method for compatibility
-    this.metricsRepository.recordRetryAttempt(requestId, groupKey, attemptNumber);
   }
   
   private handleRequestCompleted(event: Event): void {
@@ -320,7 +402,7 @@ export class MetricsEventListener {
     const attempts = payload?.attempts || 1;
     
     // Record completion metrics
-    this.metricsRepository.incrementCounter(RequestMetrics.COMPLETED.name, 1, {
+    this.recordCounter(RequestMetrics.COMPLETED, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || '',
       [DimensionKey.STATUS_CODE]: statusCode.toString(),
@@ -329,15 +411,12 @@ export class MetricsEventListener {
     
     // Record total time to completion (end-to-end)
     if (totalDuration > 0) {
-      this.metricsRepository.recordTiming(RequestMetrics.TOTAL_TIME.name, totalDuration, {
+      this.recordTiming(RequestMetrics.TOTAL_TIME, totalDuration, {
         [DimensionKey.GROUP_KEY]: groupKey,
         [DimensionKey.ORG_ID]: orgId || '',
         [DimensionKey.ATTEMPTS]: attempts.toString()
       });
     }
-    
-    // Record completion with legacy method for compatibility
-    this.metricsRepository.recordRequestCompletion(requestId, statusCode);
   }
   
   private handleRequestFailed(event: Event): void {
@@ -354,7 +433,7 @@ export class MetricsEventListener {
     const totalDuration = payload?.totalDuration || 0;
     
     // Record failure metrics
-    this.metricsRepository.incrementCounter(RequestMetrics.FAILED.name, 1, {
+    this.recordCounter(RequestMetrics.FAILED, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || '',
       [DimensionKey.STATUS_CODE]: statusCode.toString(),
@@ -365,15 +444,12 @@ export class MetricsEventListener {
     
     // Record total time until failure
     if (totalDuration > 0) {
-      this.metricsRepository.recordTiming(RequestMetrics.FAILURE_TIME.name, totalDuration, {
+      this.recordTiming(RequestMetrics.FAILURE_TIME, totalDuration, {
         [DimensionKey.GROUP_KEY]: groupKey,
         [DimensionKey.ORG_ID]: orgId || '',
         [DimensionKey.ERROR_TYPE]: errorType
       });
     }
-    
-    // Record completion with legacy method for compatibility
-    this.metricsRepository.recordRequestCompletion(requestId, statusCode);
   }
   
   private handleCooldownActivated(event: Event): void {
@@ -389,7 +465,7 @@ export class MetricsEventListener {
     const failureCount = payload?.failureCount || 0;
     
     // Record cooldown metrics
-    this.metricsRepository.incrementCounter(ThrottleMetrics.COOLDOWN_ACTIVATED.name, 1, {
+    this.recordCounter(ThrottleMetrics.COOLDOWN_ACTIVATED, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || '',
       [DimensionKey.COOLDOWN_REASON]: reason
@@ -397,7 +473,7 @@ export class MetricsEventListener {
     
     // Record cooldown duration
     if (duration > 0) {
-      this.metricsRepository.recordHistogram(ThrottleMetrics.COOLDOWN_DURATION.name, duration, {
+      this.recordHistogram(ThrottleMetrics.COOLDOWN_DURATION, duration, {
         [DimensionKey.GROUP_KEY]: groupKey,
         [DimensionKey.ORG_ID]: orgId || '',
         [DimensionKey.COOLDOWN_REASON]: reason
@@ -406,14 +482,11 @@ export class MetricsEventListener {
     
     // Record failure count that triggered cooldown
     if (failureCount > 0) {
-      this.metricsRepository.recordGauge(ThrottleMetrics.FAILURE_COUNT.name, failureCount, {
+      this.recordGauge(ThrottleMetrics.FAILURE_COUNT, failureCount, {
         [DimensionKey.GROUP_KEY]: groupKey,
         [DimensionKey.ORG_ID]: orgId || ''
       });
     }
-    
-    // Legacy method for compatibility
-    this.metricsRepository.recordCooldownActivation(groupKey, duration, reason);
   }
   
   private handleCooldownExpired(event: Event): void {
@@ -427,14 +500,14 @@ export class MetricsEventListener {
     const actualDuration = payload?.actualDurationMs || 0;
     
     // Record cooldown expiration
-    this.metricsRepository.incrementCounter(ThrottleMetrics.COOLDOWN_EXPIRED.name, 1, {
+    this.recordCounter(ThrottleMetrics.COOLDOWN_EXPIRED, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || ''
     });
     
     // Record actual duration (how long the cooldown was actually in effect)
     if (actualDuration > 0) {
-      this.metricsRepository.recordHistogram(ThrottleMetrics.ACTUAL_COOLDOWN_DURATION.name, actualDuration, {
+      this.recordHistogram(ThrottleMetrics.ACTUAL_COOLDOWN_DURATION, actualDuration, {
         [DimensionKey.GROUP_KEY]: groupKey,
         [DimensionKey.ORG_ID]: orgId || ''
       });
@@ -454,7 +527,7 @@ export class MetricsEventListener {
     const current = payload?.current || 0;
     
     // Record rate limit hit
-    this.metricsRepository.incrementCounter(ThrottleMetrics.RATE_LIMITED.name, 1, {
+    this.recordCounter(ThrottleMetrics.RATE_LIMITED, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || '',
       [DimensionKey.RATE_LIMIT_REASON]: reason
@@ -462,7 +535,7 @@ export class MetricsEventListener {
     
     // Record current rate vs limit
     if (limit > 0) {
-      this.metricsRepository.recordGauge(ThrottleMetrics.RATE_LIMIT_UTILIZATION.name, (current / limit) * 100, {
+      this.recordGauge(ThrottleMetrics.RATE_LIMIT_UTILIZATION, (current / limit) * 100, {
         [DimensionKey.GROUP_KEY]: groupKey,
         [DimensionKey.ORG_ID]: orgId || ''
       });
@@ -485,29 +558,29 @@ export class MetricsEventListener {
     const utilizationPercent = maxCapacity > 0 ? (currentCapacity / maxCapacity) * 100 : 0;
     
     // Record system capacity metrics
-    this.metricsRepository.recordGauge(SystemMetrics.MAX_CAPACITY.name, maxCapacity);
-    this.metricsRepository.recordGauge(SystemMetrics.CAPACITY.name, currentCapacity);
-    this.metricsRepository.recordGauge(SystemMetrics.CAPACITY_UTILIZATION.name, utilizationPercent);
+    this.recordGauge(SystemMetrics.MAX_CAPACITY, maxCapacity, {});
+    this.recordGauge(SystemMetrics.CAPACITY, currentCapacity, {});
+    this.recordGauge(SystemMetrics.CAPACITY_UTILIZATION, utilizationPercent, {});
     
     // Record active requests and groups
-    this.metricsRepository.recordGauge(SystemMetrics.ACTIVE_REQUESTS.name, activeRequests);
-    this.metricsRepository.recordGauge(SystemMetrics.ACTIVE_GROUPS.name, activeGroups);
-    this.metricsRepository.recordGauge(SystemMetrics.COOLDOWN_GROUPS.name, cooldownGroups);
+    this.recordGauge(SystemMetrics.ACTIVE_REQUESTS, activeRequests, {});
+    this.recordGauge(SystemMetrics.ACTIVE_GROUPS, activeGroups, {});
+    this.recordGauge(SystemMetrics.COOLDOWN_GROUPS, cooldownGroups, {});
     
     // Record queue metrics if available
     if (payload.queueLength !== undefined) {
-      this.metricsRepository.recordGauge(QueueMetrics.QUEUE_LENGTH.name, payload.queueLength);
+      this.recordGauge(QueueMetrics.QUEUE_LENGTH, payload.queueLength, {});
     }
     
     if (payload.queueCapacity !== undefined) {
-      this.metricsRepository.recordGauge(QueueMetrics.QUEUE_CAPACITY.name, payload.queueCapacity);
+      this.recordGauge(QueueMetrics.QUEUE_CAPACITY, payload.queueCapacity, {});
       
       // Calculate queue utilization
       const queueUtilization = payload.queueCapacity > 0 
         ? (payload.queueLength / payload.queueCapacity) * 100 
         : 0;
       
-      this.metricsRepository.recordGauge(QueueMetrics.QUEUE_UTILIZATION.name, queueUtilization);
+      this.recordGauge(QueueMetrics.QUEUE_UTILIZATION, queueUtilization, {});
     }
   }
   
@@ -524,19 +597,19 @@ export class MetricsEventListener {
     const durationMs = payload?.durationMs || 30000; // Default to 30s
     
     // Record circuit breaker opened
-    this.metricsRepository.incrementCounter(CircuitBreakerMetrics.OPEN.name, 1, {
+    this.recordCounter(CircuitBreakerMetrics.OPEN, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || '',
       [DimensionKey.CIRCUIT_REASON]: reason
     });
     
     // Record failure count and planned duration
-    this.metricsRepository.recordGauge(CircuitBreakerMetrics.THRESHOLD.name, failureCount, {
+    this.recordGauge(CircuitBreakerMetrics.THRESHOLD, failureCount, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || ''
     });
     
-    this.metricsRepository.recordGauge(CircuitBreakerMetrics.OPEN_TIME.name, durationMs, {
+    this.recordGauge(CircuitBreakerMetrics.OPEN_TIME, durationMs, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || ''
     });
@@ -553,14 +626,14 @@ export class MetricsEventListener {
     const actualDurationMs = payload?.actualDurationMs || 0;
     
     // Record circuit breaker closed
-    this.metricsRepository.incrementCounter(CircuitBreakerMetrics.CLOSE.name, 1, {
+    this.recordCounter(CircuitBreakerMetrics.CLOSE, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || ''
     });
     
     // Record actual open duration
     if (actualDurationMs > 0) {
-      this.metricsRepository.recordHistogram(CircuitBreakerMetrics.ACTUAL_OPEN_DURATION.name, actualDurationMs, {
+      this.recordHistogram(CircuitBreakerMetrics.ACTUAL_OPEN_DURATION, actualDurationMs, {
         [DimensionKey.GROUP_KEY]: groupKey,
         [DimensionKey.ORG_ID]: orgId || ''
       });
@@ -580,7 +653,7 @@ export class MetricsEventListener {
     const errorType = payload?.errorType || 'unknown';
     
     // Record dead letter metrics
-    this.metricsRepository.incrementCounter(DeadLetterMetrics.ADDED.name, 1, {
+    this.recordCounter(DeadLetterMetrics.ADDED, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || '',
       [DimensionKey.DEADLETTER_REASON]: reason,
@@ -589,7 +662,7 @@ export class MetricsEventListener {
     });
     
     // Update dead letter count gauge
-    this.metricsRepository.incrementCounter(DeadLetterMetrics.COUNT.name, 1, {
+    this.recordCounter(DeadLetterMetrics.COUNT, 1, {
       [DimensionKey.GROUP_KEY]: groupKey,
       [DimensionKey.ORG_ID]: orgId || ''
     });

@@ -14,6 +14,7 @@ export interface HeaderValidationResult {
   targetUrl?: URL;
   orgId?: string;
   groupBy?: string;
+  groupKey?: string;
   error?: string;
 }
 
@@ -87,10 +88,7 @@ export class RequestAcceptor {
   async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     this.logIncomingRequest(req);
     let requestId = crypto.randomUUID();
-    
-
-    
-    
+        
     if (this.isShuttingDown) {
       this.sendErrorResponse(res, 503, 'Service is shutting down');
       return;
@@ -100,7 +98,7 @@ export class RequestAcceptor {
     if (!validationResult) return;
     
     // emit event for request received
-    this.publishEvent(EventType.REQUEST_RECEIVED, { requestId, orgId: validationResult.orgId, groupKey: validationResult.groupBy });
+    this.publishEvent(EventType.REQUEST_RECEIVED, { requestId, orgId: validationResult.orgId, groupKey: validationResult.groupKey });
 
     const parsedBody = await this.parseBodyAndRespondOnError(req, res);
     if (!parsedBody) return;
@@ -187,7 +185,8 @@ export class RequestAcceptor {
       targetUrl: validationResult.targetUrl!,
       method: req.method || 'GET',
       headers: req.headers as Record<string, string>,
-      body: parsedBody
+      body: parsedBody,
+      groupKey : validationResult.groupKey,
     });
   }
 
@@ -272,6 +271,7 @@ export class RequestAcceptor {
     // Validate URL
     try {
       const targetUrl = new URL(headers.url);
+      const  hostname = new URL(targetUrl).hostname;
       
       // Log the parsed URL components
       // console.log(`RequestAcceptor: Parsed URL: protocol=${targetUrl.protocol}, hostname=${targetUrl.hostname}, path=${targetUrl.pathname}`);
@@ -280,7 +280,13 @@ export class RequestAcceptor {
         valid: true,
         targetUrl,
         orgId: headers.org,
-        groupBy: headers.groupBy
+        groupBy: headers.groupBy,
+        groupKey:Request.computeGroupKey({
+          orgId: headers.org,
+          groupBy: headers.groupBy,
+          targetUrl: targetUrl,
+          hostname : hostname
+        })
       };
     } catch (error) {
       console.error(`RequestAcceptor: Error parsing URL: ${error.message}`);

@@ -1,4 +1,4 @@
-import { MetricsRepository } from '../interfaces/MetricsRepository';
+import { MetricsRepository, MetricDefinition } from '../interfaces/MetricsRepository';
 import { MemoryMetricsStore } from '../storage/MemoryMetricsStore';
 // import { MongoMetricsRepository } from '../storage/MongoMetricsRepository'; // Comment out or remove import
 import { MetricsEventListener } from '../collection/MetricsEventListener';
@@ -78,6 +78,50 @@ export class MetricsService implements MetricsRepository {
     }
   }
   
+  // #region Enhanced Dimension-Aware Methods
+  
+  /**
+   * Record a metric with dimension validation
+   * @param metricDef The metric definition to validate against
+   * @param value The value to record
+   * @param dimensions The dimensions to use
+   */
+  recordMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void {
+    this.memoryStore.recordMetric(metricDef, value, dimensions);
+  }
+  
+  /**
+   * Record a timing metric with dimension validation
+   * @param metricDef The metric definition to validate against
+   * @param durationMs The duration in milliseconds
+   * @param dimensions The dimensions to use
+   */
+  recordTimingMetric(metricDef: MetricDefinition, durationMs: number, dimensions: Record<string, string>): void {
+    this.memoryStore.recordTimingMetric(metricDef, durationMs, dimensions);
+  }
+  
+  /**
+   * Record a histogram metric with dimension validation
+   * @param metricDef The metric definition to validate against
+   * @param value The value to record
+   * @param dimensions The dimensions to use
+   */
+  recordHistogramMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void {
+    this.memoryStore.recordHistogramMetric(metricDef, value, dimensions);
+  }
+  
+  /**
+   * Record a gauge metric with dimension validation
+   * @param metricDef The metric definition to validate against
+   * @param value The value to record
+   * @param dimensions The dimensions to use
+   */
+  recordGaugeMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void {
+    this.memoryStore.recordGaugeMetric(metricDef, value, dimensions);
+  }
+  
+  // #endregion
+
   /**
    * Clean up resources when shutting down
    */
@@ -159,22 +203,7 @@ export class MetricsService implements MetricsRepository {
     }
   }
   
-  // Legacy compatibility methods (delegate to memory store)
-  recordRequestStart(requestId: string, requestGroupKey: string): void {
-    this.memoryStore.recordRequestStart(requestId, requestGroupKey);
-  }
-  
-  recordRequestCompletion(requestId: string, statusCode: number): void {
-    this.memoryStore.recordRequestCompletion(requestId, statusCode);
-  }
-  
-  recordRetryAttempt(requestId: string, requestGroupKey: string, attemptNumber: number): void {
-    this.memoryStore.recordRetryAttempt(requestId, requestGroupKey, attemptNumber);
-  }
-  
-  recordCooldownActivation(requestGroupKey: string, duration: number, reason?: string): void {
-    this.memoryStore.recordCooldownActivation(requestGroupKey, duration, reason);
-  }
+
   
   // Methods that require persistence or more complex logic (can return empty/placeholder for now)
   async getRetryAnalysis(requestGroupKey: string, timeframe: string): Promise<any> {

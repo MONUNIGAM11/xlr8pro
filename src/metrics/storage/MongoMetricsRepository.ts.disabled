@@ -375,21 +375,7 @@ export class MongoMetricsRepository implements MetricsRepository {
     }
   }
   
-  recordRequestStart(requestId: string, requestGroupKey: string): void {
-    this.memoryStore.recordRequestStart(requestId, requestGroupKey);
-  }
-  
-  recordRequestCompletion(requestId: string, statusCode: number): void {
-    this.memoryStore.recordRequestCompletion(requestId, statusCode);
-  }
-  
-  recordRetryAttempt(requestId: string, requestGroupKey: string, attemptNumber: number): void {
-    this.memoryStore.recordRetryAttempt(requestId, requestGroupKey, attemptNumber);
-  }
-  
-  recordCooldownActivation(requestGroupKey: string, duration: number, reason?: string): void {
-    this.memoryStore.recordCooldownActivation(requestGroupKey, duration, reason);
-  }
+
   
   async getSummaryMetrics(): Promise<Record<string, any>> {
     return this.memoryStore.getSummaryMetrics();

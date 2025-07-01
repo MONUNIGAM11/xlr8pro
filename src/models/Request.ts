@@ -14,6 +14,7 @@ export interface RequestData {
   id: string;
   orgId?: string;
   groupBy: string;
+  groupKey?: string;
   targetUrl: URL | string;
   method?: string;
   headers?: Record<string, string>;
@@ -76,8 +77,7 @@ export class Request {
     this.responseTime = data.responseTime || null;
     this.lastError = data.lastError || null;
     this.delayMs = data.delayMs || undefined;
-    // Compute group key
-    this.groupKey = this.computeGroupKey();
+    this.groupKey = data.groupKey || this.computeGroupKey();
   }
 
   /**
@@ -219,6 +219,26 @@ export class Request {
     };
   }
 
+      /**
+   * Compute the group key for this request
+   * @returns {string} Group key
+   */
+  static computeGroupKey(data : Record<string, any>): string {
+    let hostname = 'unknown';
+    
+    if (data.targetUrl instanceof URL) {
+      hostname = data.hostname;
+    } else if (typeof data.targetUrl === 'string') {
+      try {
+        hostname = new URL(data.targetUrl).hostname;
+      } catch (error) {
+        // Invalid URL, use default hostname
+      }
+    }
+    
+    return `${data.orgId}:${data.groupBy}:${hostname}`;
+  }
+
   /**
    * Create a Request from a plain object
    * @param {Object} data - Plain object representation
@@ -241,7 +261,7 @@ export class Request {
         lastUpdatedAt: data.lastUpdatedAt ? new Date(data.lastUpdatedAt) : new Date(),
         completedAt: data.completedAt ? new Date(data.completedAt) : undefined,
         nextRetryAt: data.nextRetryAt ? new Date(data.nextRetryAt) : undefined,
-        delayMs: data.delayMs || undefined
+        delayMs: data.delayMs || undefined,
       });
     }
 } 
