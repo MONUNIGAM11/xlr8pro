@@ -2,7 +2,7 @@ import http from 'http';
 import https from 'https';
 import { URL } from 'url';
 import { Request, RequestStatus } from '../models/Request';
-import { eventBus, MetricsEventType } from '../events/EventBus';
+import { eventBus, EventType } from '../events/EventBus';
 
 /**
  * ProxyExecutor options
@@ -40,7 +40,7 @@ export class ProxyExecutor {
     this.requestRepository = options.requestRepository;
 
     // Register for shutdown events
-    eventBus.subscribe(MetricsEventType.SHUTDOWN_INITIATED, () => this.handleShutdown());
+    eventBus.subscribe(EventType.SHUTDOWN_INITIATED, () => this.handleShutdown());
 
     console.log('Proxy executor initialized');
   }
@@ -94,7 +94,7 @@ export class ProxyExecutor {
 
     // Publish request forwarding event
     eventBus.publish({
-      type: MetricsEventType.REQUEST_FORWARDED,
+      type: EventType.REQUEST_FORWARDED,
       requestId: request.id,
       groupKey: request.groupKey,
       orgId: request.orgId,
@@ -115,7 +115,7 @@ export class ProxyExecutor {
 
       // Publish response received event
       eventBus.publish({
-        type: MetricsEventType.RESPONSE_RECEIVED,
+        type: EventType.RESPONSE_RECEIVED,
         requestId: request.id,
         groupKey: request.groupKey,
         orgId: request.orgId,
@@ -141,7 +141,7 @@ export class ProxyExecutor {
       // It might be more appropriate to have a separate EventType.REQUEST_FAILED or similar,
       // but I'll keep the original type for now.
       eventBus.publish({
-        type: MetricsEventType.REQUEST_FAILED, // Or consider EventType.REQUEST_FAILED
+        type: EventType.REQUEST_FAILED, // Or consider EventType.REQUEST_FAILED
         requestId: request.id,
         groupKey: request.groupKey,
         orgId: request.orgId,

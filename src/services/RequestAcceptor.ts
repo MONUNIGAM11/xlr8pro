@@ -3,7 +3,8 @@ import { URL } from 'url';
 import { Request, RequestStatus } from '../models/Request';
 import { eventBus } from '../events/EventBus';
 import { ThrottleReason, ThrottleResult } from './ThrottleManager';
-import { MetricsEventType } from '../metrics/collection/MetricsEventListener';
+import { EventType } from '../events/EventBus';
+
 
 /**
  * Result of header validation
@@ -54,7 +55,7 @@ export class RequestAcceptor {
     this.proxyExecutor = dependencies.proxyExecutor;
     
     // Register for shutdown events
-    eventBus.subscribe(MetricsEventType.SHUTDOWN_INITIATED, () => {
+    eventBus.subscribe(EventType.SHUTDOWN_INITIATED, () => {
       this.isShuttingDown = true;
     });
     
@@ -64,7 +65,7 @@ export class RequestAcceptor {
     /**
    * Helper to publish events in a consistent way
    */
-    private publishEvent(type: MetricsEventType, data: Partial<{ requestId: string; groupKey: string; orgId: string; payload: any; }>) {
+    private publishEvent(type: EventType, data: Partial<{ requestId: string; groupKey: string; orgId: string; payload: any; }>) {
       console.log("aur publish hua hai ye = ", type)
       eventBus.publish({
         type,
@@ -99,7 +100,7 @@ export class RequestAcceptor {
     if (!validationResult) return;
     
     // emit event for request received
-    this.publishEvent(MetricsEventType.REQUEST_RECEIVED, { requestId, orgId: validationResult.orgId, groupKey: validationResult.groupBy });
+    this.publishEvent(EventType.REQUEST_RECEIVED, { requestId, orgId: validationResult.orgId, groupKey: validationResult.groupBy });
 
     const parsedBody = await this.parseBodyAndRespondOnError(req, res);
     if (!parsedBody) return;
@@ -145,7 +146,7 @@ export class RequestAcceptor {
   private validateAndRespondOnError(req: http.IncomingMessage, res: http.ServerResponse) {
     const validationResult = this.validateHeaders(req);
     if (!validationResult.valid) {
-      this.publishEvent(MetricsEventType.REQUEST_MALFORMED, { payload: { reason: validationResult.error || 'Invalid request headers' } });
+      this.publishEvent(EventType.REQUEST_MALFORMED, { payload: { reason: validationResult.error || 'Invalid request headers' } });
       this.sendErrorResponse(res, 400, validationResult.error || 'Invalid request headers');
       return null;
     }
@@ -160,12 +161,12 @@ export class RequestAcceptor {
       if (body) {
         parsedBody = JSON.parse(body.toString());
       } else {
-        this.publishEvent(MetricsEventType.REQUEST_MALFORMED, { payload: { reason: 'Empty request body' } });
+        this.publishEvent(EventType.REQUEST_MALFORMED, { payload: { reason: 'Empty request body' } });
         this.sendErrorResponse(res, 400, 'Empty request body');
         return null;
       }
     } catch (error) {
-      this.publishEvent(MetricsEventType.REQUEST_MALFORMED, { payload: { reason: 'Invalid JSON body' } });
+      this.publishEvent(EventType.REQUEST_MALFORMED, { payload: { reason: 'Invalid JSON body' } });
       this.sendErrorResponse(res, 400, 'Invalid JSON body');
       return null;
     }
@@ -194,13 +195,13 @@ export class RequestAcceptor {
     console.log('>>>>>>> RequestAcceptor: Request throttled', throttleResult.reason);
     const statusCode = this.mapReasonToStatusCode(throttleResult.reason);
     this.sendErrorResponse(res, statusCode, throttleResult.reason || 'Request cannot be accepted');
-    this.publishEvent(MetricsEventType.RATE_LIMITED, {
+    this.publishEvent(EventType.RATE_LIMITED, {
       requestId: request.id,
       groupKey: request.groupKey,
       orgId: request.orgId,
       payload: { reason: throttleResult.reason },
     });
-    this.publishEvent(MetricsEventType.RATE_LIMIT_EXCEEDED, {
+    this.publishEvent(EventType.RATE_LIMIT_EXCEEDED, {
       requestId: request.id,
       groupKey: request.groupKey,
       orgId: request.orgId,
@@ -211,7 +212,7 @@ export class RequestAcceptor {
   private handleDelayedRequest(res: http.ServerResponse, request: any, throttleResult: any) {
     request.scheduleDelay(throttleResult.delayMs!);
     this.requestRepository.add(request);
-    this.publishEvent(MetricsEventType.REQUEST_DELAYED, {
+    this.publishEvent(EventType.REQUEST_DELAYED, {
       requestId: request.id,
       groupKey: request.groupKey,
       orgId: request.orgId,
@@ -225,7 +226,7 @@ export class RequestAcceptor {
 
   private acceptAndForwardRequest(res: http.ServerResponse, request: any) {
     this.requestRepository.add(request);
-    this.publishEvent(MetricsEventType.REQUEST_ACCEPTED, {
+    this.publishEvent(EventType.REQUEST_ACCEPTED, {
       requestId: request.id,
       groupKey: request.groupKey,
       orgId: request.orgId,
@@ -340,7 +341,7 @@ export class RequestAcceptor {
       timestamp: new Date().toISOString()
     }));
     // Publish RESPONSE_SENT event for error responses
-    this.publishEvent(MetricsEventType.RESPONSE_SENT, { payload: { statusCode, message } });
+    this.publishEvent(EventType.RESPONSE_SENT, { payload: { statusCode, message } });
   }
 
   /**
@@ -357,7 +358,7 @@ export class RequestAcceptor {
       message: 'Request accepted for processing'
     }));
     // Publish RESPONSE_SENT event for success responses
-    this.publishEvent(MetricsEventType.RESPONSE_SENT, { requestId, payload: { statusCode: 200 } });
+    this.publishEvent(EventType.RESPONSE_SENT, { requestId, payload: { statusCode: 200 } });
   }
 
   /**

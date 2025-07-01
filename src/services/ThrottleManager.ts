@@ -1,6 +1,6 @@
 import os from 'os';
 import { Request } from '../models/Request';
-import { eventBus, MetricsEventType } from '../events/EventBus';
+import { eventBus, EventType } from '../events/EventBus';
 import { SettingsService } from './SettingsService';
 
 /**
@@ -74,7 +74,7 @@ export class ThrottleManager {
     // );
     
     // Register for shutdown events
-    eventBus.subscribe(MetricsEventType.SHUTDOWN_INITIATED, () => {
+    eventBus.subscribe(EventType.SHUTDOWN_INITIATED, () => {
       if (this.capacityUpdateTimer) {
         clearInterval(this.capacityUpdateTimer);
         this.capacityUpdateTimer = null;
@@ -184,7 +184,7 @@ export class ThrottleManager {
       
       // Emit capacity update event
       eventBus.publish({
-        type: MetricsEventType.CAPACITY_UPDATED,
+        type: EventType.CAPACITY_UPDATED,
         payload: {
           capacity: this.currentCapacity,
           systemLoad: this.systemLoad,

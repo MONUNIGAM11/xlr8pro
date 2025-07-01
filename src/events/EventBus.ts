@@ -27,7 +27,7 @@
 //   CONFIGURATION_CHANGED = 'configuration_changed'
 // }
 
-export enum MetricsEventType {
+export enum EventType {
   // Request lifecycle events
   REQUEST_RECEIVED = 'REQUEST_RECEIVED',
   REQUEST_VALIDATED = 'REQUEST_VALIDATED',
@@ -63,7 +63,7 @@ export enum MetricsEventType {
  * Event interface
  */
 export interface Event {
-  type: MetricsEventType;
+  type: EventType;
   requestId?: string;
   groupKey?: string;
   orgId?: string;
@@ -81,7 +81,7 @@ export type EventHandler = (event: Event) => void;
  * Acts as a central messaging system for decoupled components
  */
 export class EventBus {
-  private subscribers: Map<MetricsEventType, Set<EventHandler>> = new Map();
+  private subscribers: Map<EventType, Set<EventHandler>> = new Map();
 
   constructor() {
     console.log('Event bus initialized');
@@ -134,11 +134,11 @@ export class EventBus {
 
   /**
    * Subscribe to an event type
-   * @param {MetricsEventType} eventType - Event type to subscribe to
+   * @param {EventType} eventType - Event type to subscribe to
    * @param {EventHandler} handler - Handler function for the event
    * @returns {Function} Unsubscribe function
    */
-  subscribe(eventType: MetricsEventType, handler: EventHandler): () => void {
+  subscribe(eventType: EventType, handler: EventHandler): () => void {
     if (!this.subscribers.has(eventType)) {
       this.subscribers.set(eventType, new Set());
     }
@@ -154,10 +154,10 @@ export class EventBus {
 
   /**
    * Unsubscribe from an event type
-   * @param {MetricsEventType} eventType - Event type to unsubscribe from
+   * @param {EventType} eventType - Event type to unsubscribe from
    * @param {EventHandler} handler - Handler function to remove
    */
-  unsubscribe(eventType: MetricsEventType, handler: EventHandler): void {
+  unsubscribe(eventType: EventType, handler: EventHandler): void {
     const handlers = this.subscribers.get(eventType);
     
     if (handlers) {
@@ -172,10 +172,10 @@ export class EventBus {
 
   /**
    * Get the number of subscribers for an event type
-   * @param {MetricsEventType} eventType - Event type to check
+   * @param {EventType} eventType - Event type to check
    * @returns {number} Number of subscribers
    */
-  getSubscriberCount(eventType: MetricsEventType): number {
+  getSubscriberCount(eventType: EventType): number {
     return this.subscribers.get(eventType)?.size || 0;
   }
 }

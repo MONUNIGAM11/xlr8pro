@@ -1,5 +1,5 @@
 import { RequestGroup } from '../models/RequestGroup';
-import { eventBus, MetricsEventType } from '../events/EventBus';
+import { eventBus, EventType } from '../events/EventBus';
 
 /**
  * Repository for managing RequestGroup entities
@@ -8,7 +8,7 @@ export class GroupRepository {
   private groups: Map<string, RequestGroup> = new Map();
   private cooldownTimers: Map<string, NodeJS.Timeout> = new Map();
   private eventBus: any;
-
+ 
   constructor() {
     this.eventBus = eventBus;
     console.log('Group repository initialized');
@@ -65,7 +65,7 @@ export class GroupRepository {
       
       // Publish cooldown expired event
       this.eventBus.publish({
-        type: MetricsEventType.COOLDOWN_EXPIRED,
+        type: EventType.COOLDOWN_EXPIRED,
         groupKey,
         timestamp: new Date()
       });
@@ -76,7 +76,7 @@ export class GroupRepository {
     
     // Publish cooldown activated event
     this.eventBus.publish({
-      type: MetricsEventType.COOLDOWN_ACTIVATED,
+      type: EventType.COOLDOWN_ACTIVATED,
       groupKey,
       payload: {
         durationMs,
@@ -190,7 +190,7 @@ export class GroupRepository {
               
               // Publish cooldown expired event
               this.eventBus.publish({
-                type: MetricsEventType.COOLDOWN_EXPIRED,
+                type: EventType.COOLDOWN_EXPIRED,
                 groupKey: key,
                 timestamp: new Date()
               });

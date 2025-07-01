@@ -39,7 +39,7 @@ export interface MetricsRepository {
   // Time series methods
   getTimeSeries(name: string, dimensions: Record<string, string>, start: Date, end: Date): Promise<TimePoint[]>;
   
-  // Legacy compatibility methods
+  // // Legacy compatibility methods
   recordRequestStart(requestId: string, requestGroupKey: string): void;
   recordRequestCompletion(requestId: string, statusCode: number): void;
   recordRetryAttempt(requestId: string, requestGroupKey: string, attemptNumber: number): void;

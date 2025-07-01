@@ -12,44 +12,45 @@ import {
   TrafficMetrics,
   ConnectionMetrics
 } from '../definitions/MetricDefinitions';
+import { EventType } from '../../events/EventBus';
 
 /**
  * Event types that the metrics system can listen to
  */
-export enum MetricsEventType {
-  // Request lifecycle events
-  REQUEST_RECEIVED = 'REQUEST_RECEIVED',
-  REQUEST_VALIDATED = 'REQUEST_VALIDATED',
-  REQUEST_ACCEPTED = 'REQUEST_ACCEPTED',
-  REQUEST_FORWARDED = 'REQUEST_FORWARDED',
-  RESPONSE_RECEIVED = 'RESPONSE_RECEIVED',
-  RETRY_SCHEDULED = 'RETRY_SCHEDULED',
-  REQUEST_COMPLETED = 'REQUEST_COMPLETED',
-  REQUEST_FAILED = 'REQUEST_FAILED',
-  // Throttling and cooldown events
-  COOLDOWN_ACTIVATED = 'COOLDOWN_ACTIVATED',
-  COOLDOWN_EXPIRED = 'COOLDOWN_EXPIRED',
-  RATE_LIMITED = 'RATE_LIMITED',
-  CAPACITY_UPDATED = 'CAPACITY_UPDATED',
-  // Circuit breaker events
-  CIRCUIT_OPENED = 'CIRCUIT_OPENED',
-  CIRCUIT_CLOSED = 'CIRCUIT_CLOSED',
-  // Future events
-  DEADLETTER_ADDED = 'DEADLETTER_ADDED',
-  SHUTDOWN_INITIATED = 'SHUTDOWN_INITIATED',
-  REQUEST_MALFORMED = 'REQUEST_MALFORMED',
-  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
-  REQUEST_DELAYED = 'REQUEST_DELAYED',
-  RESPONSE_SENT = 'RESPONSE_SENT'
+// export enum EventType {
+//   // Request lifecycle events
+//   REQUEST_RECEIVED = 'REQUEST_RECEIVED',
+//   REQUEST_VALIDATED = 'REQUEST_VALIDATED',
+//   REQUEST_ACCEPTED = 'REQUEST_ACCEPTED',
+//   REQUEST_FORWARDED = 'REQUEST_FORWARDED',
+//   RESPONSE_RECEIVED = 'RESPONSE_RECEIVED',
+//   RETRY_SCHEDULED = 'RETRY_SCHEDULED',
+//   REQUEST_COMPLETED = 'REQUEST_COMPLETED',
+//   REQUEST_FAILED = 'REQUEST_FAILED',
+//   // Throttling and cooldown events
+//   COOLDOWN_ACTIVATED = 'COOLDOWN_ACTIVATED',
+//   COOLDOWN_EXPIRED = 'COOLDOWN_EXPIRED',
+//   RATE_LIMITED = 'RATE_LIMITED',
+//   CAPACITY_UPDATED = 'CAPACITY_UPDATED',
+//   // Circuit breaker events
+//   CIRCUIT_OPENED = 'CIRCUIT_OPENED',
+//   CIRCUIT_CLOSED = 'CIRCUIT_CLOSED',
+//   // Future events
+//   DEADLETTER_ADDED = 'DEADLETTER_ADDED',
+//   SHUTDOWN_INITIATED = 'SHUTDOWN_INITIATED',
+//   REQUEST_MALFORMED = 'REQUEST_MALFORMED',
+//   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
+//   REQUEST_DELAYED = 'REQUEST_DELAYED',
+//   RESPONSE_SENT = 'RESPONSE_SENT'
 
-}
+// }
 
 
 /**
  * Generic event interface
  */
 interface Event {
-  type: MetricsEventType;
+  type: EventType;
   requestId?: string;
   groupKey?: string;
   orgId?: string;
@@ -61,15 +62,15 @@ interface Event {
  * Event bus interface
  */
 interface EventBus {
-  subscribe(eventType: MetricsEventType | string, handler: (event: Event) => void): void;
-  unsubscribe(eventType: MetricsEventType | string, handler: (event: Event) => void): void;
+  subscribe(eventType: EventType | string, handler: (event: Event) => void): void;
+  unsubscribe(eventType: EventType | string, handler: (event: Event) => void): void;
 }
 
 /**
  * Listens to system events and records metrics accordingly
  */
 export class MetricsEventListener {
-  private handlersByType: Map<MetricsEventType, ((event: Event) => void)> = new Map();
+  private handlersByType: Map<EventType, ((event: Event) => void)> = new Map();
   
   constructor(
     private eventBus: EventBus,
@@ -83,36 +84,36 @@ export class MetricsEventListener {
    */
   private subscribeToEvents(): void {
     // Request lifecycle events
-    console.log("ye hai ye = ", MetricsEventType.REQUEST_RECEIVED)
-    this.subscribe(MetricsEventType.REQUEST_RECEIVED, this.handleRequestReceived.bind(this));
-    this.subscribe(MetricsEventType.REQUEST_VALIDATED, this.handleRequestValidated.bind(this));
-    this.subscribe(MetricsEventType.REQUEST_ACCEPTED, this.handleRequestAccepted.bind(this));
-    this.subscribe(MetricsEventType.REQUEST_FORWARDED, this.handleRequestForwarded.bind(this));
-    this.subscribe(MetricsEventType.RESPONSE_RECEIVED, this.handleResponseReceived.bind(this));
-    this.subscribe(MetricsEventType.RETRY_SCHEDULED, this.handleRetryScheduled.bind(this));
-    this.subscribe(MetricsEventType.REQUEST_COMPLETED, this.handleRequestCompleted.bind(this));
-    this.subscribe(MetricsEventType.REQUEST_FAILED, this.handleRequestFailed.bind(this));
+    console.log("ye hai ye = ", EventType.REQUEST_RECEIVED)
+    this.subscribe(EventType.REQUEST_RECEIVED, this.handleRequestReceived.bind(this));
+    this.subscribe(EventType.REQUEST_VALIDATED, this.handleRequestValidated.bind(this));
+    this.subscribe(EventType.REQUEST_ACCEPTED, this.handleRequestAccepted.bind(this));
+    this.subscribe(EventType.REQUEST_FORWARDED, this.handleRequestForwarded.bind(this));
+    this.subscribe(EventType.RESPONSE_RECEIVED, this.handleResponseReceived.bind(this));
+    this.subscribe(EventType.RETRY_SCHEDULED, this.handleRetryScheduled.bind(this));
+    this.subscribe(EventType.REQUEST_COMPLETED, this.handleRequestCompleted.bind(this));
+    this.subscribe(EventType.REQUEST_FAILED, this.handleRequestFailed.bind(this));
     
     // Throttling and cooldown events
-    this.subscribe(MetricsEventType.COOLDOWN_ACTIVATED, this.handleCooldownActivated.bind(this));
-    this.subscribe(MetricsEventType.COOLDOWN_EXPIRED, this.handleCooldownExpired.bind(this));
-    this.subscribe(MetricsEventType.RATE_LIMITED, this.handleRateLimited.bind(this));
+    this.subscribe(EventType.COOLDOWN_ACTIVATED, this.handleCooldownActivated.bind(this));
+    this.subscribe(EventType.COOLDOWN_EXPIRED, this.handleCooldownExpired.bind(this));
+    this.subscribe(EventType.RATE_LIMITED, this.handleRateLimited.bind(this));
     
     // System events
-    this.subscribe(MetricsEventType.CAPACITY_UPDATED, this.handleCapacityUpdated.bind(this));
+    this.subscribe(EventType.CAPACITY_UPDATED, this.handleCapacityUpdated.bind(this));
     
     // Circuit breaker events
-    this.subscribe(MetricsEventType.CIRCUIT_OPENED, this.handleCircuitOpened.bind(this));
-    this.subscribe(MetricsEventType.CIRCUIT_CLOSED, this.handleCircuitClosed.bind(this));
+    this.subscribe(EventType.CIRCUIT_OPENED, this.handleCircuitOpened.bind(this));
+    this.subscribe(EventType.CIRCUIT_CLOSED, this.handleCircuitClosed.bind(this));
     
     // Future events
-    this.subscribe(MetricsEventType.DEADLETTER_ADDED, this.handleDeadletterAdded.bind(this));
+    this.subscribe(EventType.DEADLETTER_ADDED, this.handleDeadletterAdded.bind(this));
   }
   
   /**
    * Subscribe to an event type
    */
-  private subscribe(eventType: MetricsEventType, handler: (event: Event) => void): void {
+  private subscribe(eventType: EventType, handler: (event: Event) => void): void {
     this.handlersByType.set(eventType, handler);
     this.eventBus.subscribe(eventType, handler);
   }
@@ -143,7 +144,7 @@ export class MetricsEventListener {
       [DimensionKey.ORG_ID]: orgId || ''
     });
     
-    // Also record using legacy method for compatibility
+    // // Also record using legacy method for compatibility
     this.metricsRepository.recordRequestStart(requestId, groupKey);
   }
   

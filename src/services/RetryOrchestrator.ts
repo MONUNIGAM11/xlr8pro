@@ -1,5 +1,5 @@
 import { Request, RequestStatus } from '../models/Request';
-import { eventBus, MetricsEventType } from '../events/EventBus';
+import { eventBus, EventType } from '../events/EventBus';
 import { RetryContext, retryService } from './RetryService';
 import { StatusClassifier } from './StatusClassifier';
 import { RequestGroup } from '../models/RequestGroup';
@@ -53,8 +53,8 @@ export class RetryOrchestrator {
     this.deadLetterService = dependencies.deadLetterService;
     
     // Listen for relevant events
-    eventBus.subscribe(MetricsEventType.RESPONSE_RECEIVED, this.handleResponse.bind(this));
-    eventBus.subscribe(MetricsEventType.SHUTDOWN_INITIATED, () => {
+    eventBus.subscribe(EventType.RESPONSE_RECEIVED, this.handleResponse.bind(this));
+    eventBus.subscribe(EventType.SHUTDOWN_INITIATED, () => {
       this.isShuttingDown = true;
       this.cancelAllRetries();
     });
@@ -201,7 +201,7 @@ export class RetryOrchestrator {
     
     // Publish retry scheduled event
     eventBus.publish({
-      type: MetricsEventType.RETRY_SCHEDULED,
+      type: EventType.RETRY_SCHEDULED,
       requestId: request.id,
       groupKey: request.groupKey,
       orgId: request.orgId,
@@ -274,7 +274,7 @@ export class RetryOrchestrator {
       
       // Only publish event for retry consideration if not a persistent network error
       eventBus.publish({
-        type: MetricsEventType.RESPONSE_RECEIVED,
+        type: EventType.RESPONSE_RECEIVED,
         requestId: request.id,
         groupKey: request.groupKey,
         orgId: request.orgId,
@@ -316,7 +316,7 @@ export class RetryOrchestrator {
           
           // Publish dead letter added event
           eventBus.publish({
-            type: MetricsEventType.DEADLETTER_ADDED,
+            type: EventType.DEADLETTER_ADDED,
             requestId: request.id,
             groupKey: request.groupKey,
             orgId: request.orgId,
@@ -344,7 +344,7 @@ export class RetryOrchestrator {
     
     // Publish completion event
     eventBus.publish({
-      type: success ? MetricsEventType.REQUEST_COMPLETED : MetricsEventType.REQUEST_FAILED,
+      type: success ? EventType.REQUEST_COMPLETED : EventType.REQUEST_FAILED,
       requestId: request.id,
       groupKey: request.groupKey,
       orgId: request.orgId,
