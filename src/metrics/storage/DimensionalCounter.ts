@@ -92,7 +92,7 @@ export class DimensionalCounter {
   private dimensionsToKey(dimensions: Record<string, string>): string {
     return Object.entries(dimensions)
       .sort(([k1], [k2]) => k1.localeCompare(k2))
-      .map(([k, v]) => `${k}:${v}`)
+      .map(([k, v]) => `${k}::${v}`)
       .join(',');
   }
   
@@ -106,7 +106,7 @@ export class DimensionalCounter {
     if (key === '') return result;
     
     key.split(',').forEach(pair => {
-      const [k, v] = pair.split(':');
+      const [k, v] = pair.split('::');
       result[k] = v;
     });
     

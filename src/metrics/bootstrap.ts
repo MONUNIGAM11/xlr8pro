@@ -54,7 +54,7 @@ export async function bootstrapMetricsSystem(
     },
     services
   );
-  stateCollector.start();
+  // stateCollector.start();
   
   // Setup routes
   const router = express.Router();
