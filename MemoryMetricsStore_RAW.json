@@ -1,0 +1,187 @@
+{
+  "counters": {
+    "request.received": {
+      "counters": {
+        "groupId::api-users,status::active": 1250,
+        "groupId::api-orders,status::active": 890,
+        "groupId::webhooks,status::active": 45,
+        "groupId::api-users,status::failed": 15
+      },
+      "timestamps": {
+        "groupId::api-users,status::active": 1719936000000,
+        "groupId::api-orders,status::active": 1719936000000,
+        "groupId::webhooks,status::active": 1719936000000,
+        "groupId::api-users,status::failed": 1719936120000
+      }
+    },
+    "request.completed": {
+      "counters": {
+        "groupId::api-users": 1180,
+        "groupId::api-orders": 850,
+        "groupId::webhooks": 42
+      },
+      "timestamps": {
+        "groupId::api-users": 1719936000000,
+        "groupId::api-orders": 1719936000000,
+        "groupId::webhooks": 1719936000000
+      }
+    },
+    "response.status": {
+      "counters": {
+        "groupId::api-users,statusCode::200": 1180,
+        "groupId::api-users,statusCode::429": 65,
+        "groupId::api-users,statusCode::500": 5,
+        "groupId::api-orders,statusCode::200": 850,
+        "groupId::api-orders,statusCode::404": 25,
+        "groupId::api-orders,statusCode::429": 15
+      },
+      "timestamps": {
+        "groupId::api-users,statusCode::200": 1719936000000,
+        "groupId::api-users,statusCode::429": 1719936060000,
+        "groupId::api-users,statusCode::500": 1719936120000,
+        "groupId::api-orders,statusCode::200": 1719936000000,
+        "groupId::api-orders,statusCode::404": 1719936060000,
+        "groupId::api-orders,statusCode::429": 1719936120000
+      }
+    }
+  },
+  "gauges": {
+    "system.active_requests": {
+      "counters": {
+        "": 45
+      },
+      "timestamps": {
+        "": 1719936240000
+      }
+    },
+    "group.active_requests": {
+      "counters": {
+        "groupId::api-users": 23,
+        "groupId::api-orders": 18,
+        "groupId::webhooks": 4
+      },
+      "timestamps": {
+        "groupId::api-users": 1719936240000,
+        "groupId::api-orders": 1719936240000,
+        "groupId::webhooks": 1719936240000
+      }
+    },
+    "system.load": {
+      "counters": {
+        "": 0.75
+      },
+      "timestamps": {
+        "": 1719936240000
+      }
+    }
+  },
+  "timers": {
+    "request.response_time": {
+      "counters": {
+        "groupId::api-users": 168300,
+        "groupId::api-orders": 95500,
+        "groupId::webhooks": 8400
+      },
+      "timestamps": {
+        "groupId::api-users": 1719936240000,
+        "groupId::api-orders": 1719936240000,
+        "groupId::webhooks": 1719936240000
+      }
+    }
+  },
+  "histograms": {
+    "request.response_time": {
+      "groupId::api-users": {
+        "samples": [120, 150, 180, 95, 200, 175, 145, 132, 158, 167, 142, 155, 138, 162, 149, 144, 156, 141, 159, 148],
+        "count": 1180,
+        "sum": 168300,
+        "min": 45,
+        "max": 2100,
+        "buckets": {
+          "50": 245,
+          "100": 472,
+          "200": 945,
+          "500": 1150,
+          "1000": 1175,
+          "2000": 1179,
+          "5000": 1180
+        },
+        "lastUpdated": 1719936240000
+      },
+      "groupId::api-orders": {
+        "samples": [80, 90, 110, 85, 95, 102, 88, 92, 89, 95, 87, 92, 88, 91, 86, 94, 90, 93, 85, 97],
+        "count": 850,
+        "sum": 95500,
+        "min": 65,
+        "max": 890,
+        "buckets": {
+          "50": 89,
+          "100": 678,
+          "200": 825,
+          "500": 845,
+          "1000": 850,
+          "2000": 850,
+          "5000": 850
+        },
+        "lastUpdated": 1719936240000
+      }
+    }
+  },
+  "timeSeries": {
+    "request.response_time": {
+      "groupId::api-users": {
+        "buffer": [
+          { "timestamp": 1719935700000, "value": 145 },
+          { "timestamp": 1719935760000, "value": 132 },
+          { "timestamp": 1719935820000, "value": 158 },
+          { "timestamp": 1719935880000, "value": 167 },
+          { "timestamp": 1719935940000, "value": 142 },
+          { "timestamp": 1719936000000, "value": 155 },
+          { "timestamp": 1719936060000, "value": 138 },
+          { "timestamp": 1719936120000, "value": 162 },
+          { "timestamp": 1719936180000, "value": 149 },
+          { "timestamp": 1719936240000, "value": 144 }
+        ],
+        "capacity": 1440,
+        "head": 10,
+        "size": 10
+      },
+      "groupId::api-orders": {
+        "buffer": [
+          { "timestamp": 1719935700000, "value": 89 },
+          { "timestamp": 1719935760000, "value": 95 },
+          { "timestamp": 1719935820000, "value": 87 },
+          { "timestamp": 1719935880000, "value": 92 },
+          { "timestamp": 1719935940000, "value": 88 },
+          { "timestamp": 1719936000000, "value": 91 },
+          { "timestamp": 1719936060000, "value": 86 },
+          { "timestamp": 1719936120000, "value": 94 },
+          { "timestamp": 1719936180000, "value": 90 },
+          { "timestamp": 1719936240000, "value": 93 }
+        ],
+        "capacity": 1440,
+        "head": 10,
+        "size": 10
+      }
+    },
+    "system.active_requests": {
+      "": {
+        "buffer": [
+          { "timestamp": 1719935700000, "value": 42 },
+          { "timestamp": 1719935760000, "value": 38 },
+          { "timestamp": 1719935820000, "value": 51 },
+          { "timestamp": 1719935880000, "value": 47 },
+          { "timestamp": 1719935940000, "value": 43 },
+          { "timestamp": 1719936000000, "value": 49 },
+          { "timestamp": 1719936060000, "value": 41 },
+          { "timestamp": 1719936120000, "value": 46 },
+          { "timestamp": 1719936180000, "value": 44 },
+          { "timestamp": 1719936240000, "value": 45 }
+        ],
+        "capacity": 1440,
+        "head": 10,
+        "size": 10
+      }
+    }
+  }
+}

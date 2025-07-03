@@ -33,17 +33,27 @@ export async function bootstrapMetricsSystem(
   shutdown: () => Promise<void>
 }> {
   // Initialize repository
-  const { repository } = await initializeMetricsSystem(config.mongoUri, {});
+  const { repository } = await initializeMetricsSystem();
   
   // Create service
   const service = new MetricsService(
     eventEmitter,
-    config.mongoUri ? repository : null,
+    repository,
+    config.mongoUri,
     {
-      flushIntervalMs: config.flushIntervalMs || 15000,
+      flushIntervalMs: config.flushIntervalMs || 60000,
       timeSeriesCapacity: config.memoryTimeSeriesCapacity || 1000,
     }
   );
+  
+  // Initialize the service (this will connect to MongoDB if configured)
+  try {
+    await service.initialize();
+    console.log('✅ MetricsService initialized successfully');
+  } catch (error) {
+    console.error('❌ Failed to initialize MetricsService:', error);
+    // Continue with in-memory only mode
+  }
   
   // Setup state collector
   const stateCollector = new MetricsStateCollector(

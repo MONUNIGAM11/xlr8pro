@@ -11,6 +11,7 @@ import {
 } from '../definitions/MetricDefinitions';
 import { MetricValidator, MetricDefinition } from '../utils/MetricValidator';
 import os from 'os';
+import { MemoryMetricsStore } from '../storage/MemoryMetricsStore';
 
 /**
  * Service interface for capacity information
@@ -54,7 +55,7 @@ export class MetricsStateCollector {
   private groupsIntervalId: NodeJS.Timeout | null = null;
   
   constructor(
-    private metricsRepository: MetricsRepository,
+    private metricsRepository: MemoryMetricsStore,
     private options: {
       systemIntervalMs?: number;
       groupsIntervalMs?: number;

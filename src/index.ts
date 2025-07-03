@@ -78,7 +78,7 @@ async function startApp() {
     {},
     {
       metricsPath: '/metrics', // Mount metrics API at /metrics
-      mongoUri: undefined,
+      mongoUri: 'mongodb://admin:secret@localhost:27017',
       // Other configuration can be added here
     }
   );

@@ -44,30 +44,21 @@ export * from './services/MetricsService';
  * @param options Configuration options
  */
 export async function initializeMetricsSystem(
-  mongoUri?: string,
-  options?: {
+  options: {
     flushIntervalMs?: number;
     rawMetricsTtlHours?: number;
     aggregatedTtlDays?: number;
     memoryTimeSeriesCapacity?: number;
     histogramSamples?: number;
-  }
-): Promise<{ repository: MetricsRepository }> {
-  // If MongoDB URI is provided, use MongoMetricsRepository
-  if (mongoUri) {
-    // const { MongoMetricsRepository } = await import('./storage/MongoMetricsRepository');
-    // const repository = new MongoMetricsRepository(mongoUri, 'xlr8plus_metrics', options);
-    // await repository.initialize();
-    // return { repository };
-    console.warn('MongoDB integration is currently disabled.');
-    return { repository: null as any };
-  }
-  
+  }= {
+      flushIntervalMs: 60000, // Default: flush every minute
+      memoryTimeSeriesCapacity: 1440 // Default: 24h at 1-min resolution
+    }
+): Promise<{ repository: MemoryMetricsStore }> {
+  // If MongoDB URI is provided, use MongoMetricsRepositor
   // Otherwise fall back to in-memory only
-  const repository = new MemoryMetricsStore(
-    options?.memoryTimeSeriesCapacity,
-    options?.histogramSamples
-  );
+  const repository = new MemoryMetricsStore(options.memoryTimeSeriesCapacity);
+  
   console.log('In-memory metrics store initialized.');
   return { repository };
 }

@@ -34,8 +34,7 @@ export enum MetricType {
     CIRCUIT_REASON = 'circuitReason',
     DEADLETTER_REASON = 'deadletterReason',
     ATTEMPTS = 'attempts',
-    TIMEFRAME = 'timeframe',
-    USER_AGENT = 'userAgent',
+    TIMEFRAME = 'timeframe'
   }
   
   /**
@@ -219,18 +218,6 @@ export enum MetricType {
       dimensions: [DimensionKey.GROUP_KEY, DimensionKey.ORG_ID]
     },
 
-  };
-  
-  /**
-   * Traffic Metrics
-   */
-  export const TrafficMetrics = {
-    USER_AGENT_TOTAL: {
-      name: 'traffic.user_agent_total',
-      type: MetricType.COUNTER,
-      description: 'Total requests by user agent',
-      dimensions: [DimensionKey.USER_AGENT, DimensionKey.ORG_ID, DimensionKey.GROUP_KEY],
-    },
   };
   
   /**
@@ -956,7 +943,6 @@ export enum MetricType {
     System: SystemMetrics,
     Group: GroupMetrics,
     DeadLetter: DeadLetterMetrics,
-    Traffic: TrafficMetrics,
     Connection: ConnectionMetrics,
   };
   

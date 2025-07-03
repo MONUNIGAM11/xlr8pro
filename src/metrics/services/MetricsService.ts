@@ -1,59 +1,51 @@
 import { MetricsRepository, MetricDefinition } from '../interfaces/MetricsRepository';
 import { MemoryMetricsStore } from '../storage/MemoryMetricsStore';
-// import { MongoMetricsRepository } from '../storage/MongoMetricsRepository'; // Comment out or remove import
+import { MongoMetricsRepository } from '../storage/MongoMetricsRepository'; // Comment out or remove import
 import { MetricsEventListener } from '../collection/MetricsEventListener';
 import { getTimeframeMilliseconds } from '../utils/TimeUtils';
-import { ConnectionMetrics, getMetricDefinition, TrafficMetrics } from '../definitions/MetricDefinitions';
-
-// Define a placeholder type or interface if needed for type safety when mongoRepo is null
-type MongoMetricsRepository = any;
-
+import { ConnectionMetrics, getMetricDefinition } from '../definitions/MetricDefinitions';
 
 /**
  * Main service that coordinates metrics collection, storage, and retrieval
  */
 export class MetricsService implements MetricsRepository {
-  private memoryStore: MemoryMetricsStore;
-  private mongoRepo: MongoMetricsRepository | null; // Allow mongoRepo to be null
+  // private memoryStore: MemoryMetricsStore;
+  private mongoRepo: MongoMetricsRepository; // Allow mongoRepo to be null
   private eventListener: MetricsEventListener;
   private flushInterval: NodeJS.Timeout | null = null; // Allow flushInterval to be null
-  
+  private isFlushingToMongo: boolean = false; // Flag to prevent data collection during flush
+  private pendingOperations: Array<() => void> = []; // Queue for operations during flush
   constructor(
     eventBus: any,
+    private memoryStore: MemoryMetricsStore,
     mongoClient: any, // This will be null/undefined when not using MongoDB
     private options: {
       flushIntervalMs: number;
       timeSeriesCapacity: number;
     } = {
-      flushIntervalMs: 60000, // Default: flush every minute
+      flushIntervalMs: 600000, // Default: flush every minute
       timeSeriesCapacity: 1440 // Default: 24h at 1-min resolution
     }
   ) {
     // Initialize components
-    this.memoryStore = new MemoryMetricsStore(options.timeSeriesCapacity);
+    // this.memoryStore = new MemoryMetricsStore(options.timeSeriesCapacity);
 
-    // Conditionally initialize mongoRepo
+    // Conditionally create mongoRepo (but don't initialize yet)
     if (mongoClient) {
-      // Import dynamically or use require if needed, or ensure MongoMetricsRepository is available at runtime
-      // For now, assuming mongoClient means the class is somehow available or we handle it differently
-      // A simpler way for now is to cast or use 'any' if we know the file is there but not imported traditionally
-      const { MongoMetricsRepository: MongoRepoClass } = require('../storage/MongoMetricsRepository.ts.disabled'); // Use require and the disabled name
-      this.mongoRepo = new MongoRepoClass(mongoClient, 'xlr8plus_metrics', options);
-      console.log('MongoDB metrics repository initialized.');
-
-      // Set up periodic flush to MongoDB only if mongoClient is provided
-      this.flushInterval = setInterval(
-        () => this.flushToMongo(),
-        options.flushIntervalMs
-      );
+      this.mongoRepo = new MongoMetricsRepository(mongoClient, 'xlr8plus_metrics', options);
+      console.log('MongoDB metrics repository created (call initialize() to connect).');
     } else {
       this.mongoRepo = null;
-      console.log('MongoDB metrics repository not initialized (mongoClient not provided).');
+      console.log('MongoDB metrics repository not created (mongoClient not provided).');
     }
 
     this.eventListener = new MetricsEventListener(eventBus, this);
   }
   recordHistogram(name: string, value: number, dimensions?: Record<string, string>): void {
+    if (this.isFlushingToMongo) {
+      this.pendingOperations.push(() => this.memoryStore.recordHistogram(name, value, dimensions));
+      return;
+    }
     this.memoryStore.recordHistogram(name, value, dimensions);
   }
   getHistogramStats(name: string, dimensions?: Record<string, string>): { count: number; sum: number; min: number; max: number; avg: number; p50?: number; p90?: number; p95?: number; p99?: number; } {
@@ -67,17 +59,71 @@ export class MetricsService implements MetricsRepository {
     if (!this.mongoRepo) {
       return; // Do nothing if mongoRepo is not initialized
     }
+    
+    // Prevent concurrent flushes
+    if (this.isFlushingToMongo) {
+      console.log('Flush already in progress, skipping...');
+      return;
+    }
+    
+    this.isFlushingToMongo = true;
+    
     try {
+      // Get current batch data and immediately clear memory
       const batchData = this.memoryStore.prepareForBatch();
-      if (batchData.length > 0) {
-        await this.mongoRepo.batchWrite(batchData);
-        console.log(`Flushed ${batchData.length} metrics to MongoDB`);
+      
+      // Calculate total metrics across all types
+      const totalMetrics = batchData.counters.length + 
+                          batchData.gauges.length + 
+                          batchData.timers.length + 
+                          batchData.histograms.length + 
+                          batchData.timeSeries.length;
+      
+      if (totalMetrics > 0) {
+        
+        
+        // Push to MongoDB
+        await this.mongoRepo.flushToMongo(batchData);
+        console.log(`✅ Flushed ${totalMetrics} metrics to MongoDB (${batchData.counters.length} counters, ${batchData.gauges.length} gauges, ${batchData.timers.length} timers, ${batchData.histograms.length} histograms, ${batchData.timeSeries.length} time series)`);
+        
+        // Clear memory immediately after preparing batch to prevent duplicate data
+        this.clearMemoryAfterFlush();
+      } else {
+        console.log('No metrics to flush');
       }
     } catch (error) {
-      console.error('Error flushing metrics to MongoDB:', error);
+      console.error('❌ Error flushing metrics to MongoDB:', error);
+      // On error, we don't clear memory so data isn't lost
+    } finally {
+      this.isFlushingToMongo = false;
+      
+      // Process any pending operations that were queued during flush
+      this.processPendingOperations();
     }
   }
   
+  /**
+   * Clear memory after successful flush to prevent duplicate data
+   */
+  private clearMemoryAfterFlush(): void {
+    // Clear counters (reset to 0 but keep structure)
+    this.memoryStore.resetCounters();
+    
+    // Clear gauges (remove all as they represent current state)
+    this.memoryStore.resetGauges();
+    
+    // Clear timers
+    this.memoryStore.resetTimers();
+    
+    // Clear histograms
+    this.memoryStore.resetHistograms();
+    
+    // Clear time series (but keep recent data for real-time queries)
+    this.memoryStore.resetTimeSeriesAfterFlush();
+    
+    console.log('🧹 Memory cleared after successful flush');
+  }
+
   // #region Enhanced Dimension-Aware Methods
   
   /**
@@ -87,6 +133,10 @@ export class MetricsService implements MetricsRepository {
    * @param dimensions The dimensions to use
    */
   recordMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void {
+    if (this.isFlushingToMongo) {
+      this.pendingOperations.push(() => this.memoryStore.recordMetric(metricDef, value, dimensions));
+      return;
+    }
     this.memoryStore.recordMetric(metricDef, value, dimensions);
   }
   
@@ -97,6 +147,10 @@ export class MetricsService implements MetricsRepository {
    * @param dimensions The dimensions to use
    */
   recordTimingMetric(metricDef: MetricDefinition, durationMs: number, dimensions: Record<string, string>): void {
+    if (this.isFlushingToMongo) {
+      this.pendingOperations.push(() => this.memoryStore.recordTimingMetric(metricDef, durationMs, dimensions));
+      return;
+    }
     this.memoryStore.recordTimingMetric(metricDef, durationMs, dimensions);
   }
   
@@ -107,6 +161,10 @@ export class MetricsService implements MetricsRepository {
    * @param dimensions The dimensions to use
    */
   recordHistogramMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void {
+    if (this.isFlushingToMongo) {
+      this.pendingOperations.push(() => this.memoryStore.recordHistogramMetric(metricDef, value, dimensions));
+      return;
+    }
     this.memoryStore.recordHistogramMetric(metricDef, value, dimensions);
   }
   
@@ -117,6 +175,10 @@ export class MetricsService implements MetricsRepository {
    * @param dimensions The dimensions to use
    */
   recordGaugeMetric(metricDef: MetricDefinition, value: number, dimensions: Record<string, string>): void {
+    if (this.isFlushingToMongo) {
+      this.pendingOperations.push(() => this.memoryStore.recordGaugeMetric(metricDef, value, dimensions));
+      return;
+    }
     this.memoryStore.recordGaugeMetric(metricDef, value, dimensions);
   }
   
@@ -125,26 +187,44 @@ export class MetricsService implements MetricsRepository {
   /**
    * Clean up resources when shutting down
    */
-  shutdown(): void {
+  async shutdown(): Promise<void> {
     if (this.flushInterval) {
       clearInterval(this.flushInterval);
     }
+    
     // Perform final flush only if mongoRepo exists
     if (this.mongoRepo) {
-      this.flushToMongo().catch(err =>
-        console.error('Error during final metrics flush:', err)
-      );
-       // Assuming mongoRepo has a shutdown method
-       if ('shutdown' in this.mongoRepo && typeof this.mongoRepo.shutdown === 'function') {
-         (this.mongoRepo as any).shutdown();
-       }
+      try {
+        await this.flushToMongo();
+        console.log('✅ Final metrics flush completed');
+      } catch (err) {
+        console.error('❌ Error during final metrics flush:', err);
+      }
+      
+      // Shutdown MongoDB connection
+      try {
+        await this.mongoRepo.shutdown();
+        console.log('✅ MongoDB metrics repository shutdown completed');
+      } catch (err) {
+        console.error('❌ Error during MongoDB shutdown:', err);
+      }
     }
-     this.eventListener.unsubscribeAll(); // Unsubscribe event listeners on shutdown
+    
+    // Unsubscribe event listeners
+    if (this.eventListener && typeof this.eventListener.unsubscribeAll === 'function') {
+      this.eventListener.unsubscribeAll();
+      console.log('✅ Event listeners unsubscribed');
+    }
   }
   
   // Implement MetricsRepository interface by delegating to memory store (and mongoRepo for historical)
   
   incrementCounter(name: string, value: number, dimensions?: Record<string, string>): void {
+    if (this.isFlushingToMongo) {
+      // Queue the operation for after flush
+      this.pendingOperations.push(() => this.memoryStore.incrementCounter(name, value, dimensions));
+      return;
+    }
     this.memoryStore.incrementCounter(name, value, dimensions);
   }
   
@@ -153,6 +233,11 @@ export class MetricsService implements MetricsRepository {
   }
   
   recordGauge(name: string, value: number, dimensions?: Record<string, string>): void {
+    if (this.isFlushingToMongo) {
+      // Queue the operation for after flush
+      this.pendingOperations.push(() => this.memoryStore.recordGauge(name, value, dimensions));
+      return;
+    }
     this.memoryStore.recordGauge(name, value, dimensions);
   }
   
@@ -161,6 +246,11 @@ export class MetricsService implements MetricsRepository {
   }
   
   recordTiming(name: string, durationMs: number, dimensions?: Record<string, string>): void {
+    if (this.isFlushingToMongo) {
+      // Queue the operation for after flush
+      this.pendingOperations.push(() => this.memoryStore.recordTiming(name, durationMs, dimensions));
+      return;
+    }
     this.memoryStore.recordTiming(name, durationMs, dimensions);
   }
   
@@ -283,22 +373,6 @@ export class MetricsService implements MetricsRepository {
           });
       }
       
-      // Get User Agent Counts for this group
-      const userAgentCounts: Record<string, number> = {};
-      const userAgentMetric = (this.memoryStore as any)?.counters?.get(TrafficMetrics.USER_AGENT_TOTAL.name);
-       if (userAgentMetric) {
-         try {
-            userAgentMetric.getAll()
-              .filter((m: any) => m.dimensions.groupKey === dimensions && m.dimensions.userAgent)
-              .forEach((m: any) => {
-                const agent = m.dimensions.userAgent;
-                userAgentCounts[agent] = (userAgentCounts[agent] || 0) + m.value;
-              });
-         } catch (error) {
-             console.warn('Could not get user agent counts:', error);
-         }
-       }
-
        // Get Connection Reuse Count for this group
        const connectionReuseCount = this.getCounter(ConnectionMetrics.CONNECTION_REUSE_TOTAL.name, { groupKey: dimensions });
       
@@ -334,9 +408,6 @@ export class MetricsService implements MetricsRepository {
           reasonDistribution: Object.keys(reasonDistribution).length > 0 
             ? reasonDistribution 
             : { 'unknown': totalThrottled }
-        },
-        traffic: {
-           userAgentCounts,
         },
         connection: {
             reused: connectionReuseCount,
@@ -642,4 +713,42 @@ export class MetricsService implements MetricsRepository {
     // This method gets unique group keys from the in-memory store, which is fine
     return this.memoryStore.getUniqueDimensions();
   }
-} 
+
+  /**
+   * Initialize the MetricsService asynchronously
+   * This method should be called after creating the service to ensure MongoDB is properly connected
+   */
+  async initialize(): Promise<void> {
+    if (this.mongoRepo) {
+      await this.mongoRepo.initialize();
+      console.log('MongoDB metrics repository successfully initialized and connected.');
+      
+      // Set up periodic flush to MongoDB only after successful initialization
+      this.flushInterval = setInterval(
+        () => this.flushToMongo(),
+        this.options.flushIntervalMs
+      );
+    }
+  }
+
+  /**
+   * Process operations that were queued during flush
+   */
+  private processPendingOperations(): void {
+    if (this.pendingOperations.length > 0) {
+      console.log(`Processing ${this.pendingOperations.length} pending operations after flush`);
+      
+      // Execute all pending operations
+      const operations = [...this.pendingOperations];
+      this.pendingOperations = []; // Clear the queue
+      
+      operations.forEach(operation => {
+        try {
+          operation();
+        } catch (error) {
+          console.error('Error processing pending operation:', error);
+        }
+      });
+    }
+  }
+}

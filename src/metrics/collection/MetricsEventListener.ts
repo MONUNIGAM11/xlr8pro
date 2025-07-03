@@ -9,7 +9,6 @@ import {
   SystemMetrics,
   DeadLetterMetrics,
   StatusCategory,
-  TrafficMetrics,
   ConnectionMetrics,
   MetricType
 } from '../definitions/MetricDefinitions';
@@ -276,7 +275,7 @@ export class MetricsEventListener {
     }
     
     // Extract hostname if available
-    const hostname = payload?.hostname || '';
+    const hostname = payload?.targetUrl.hostname || '';
     
     // Use dimension-aware method - validates against RequestMetrics.FORWARDED.dimensions
     // RequestMetrics.FORWARDED expects: [ORG_ID, GROUP_KEY, HOSTNAME]
@@ -311,7 +310,6 @@ export class MetricsEventListener {
     const responseTime = payload?.responseTime || 0; // Assuming responseTime is also captured
     const latencyMs = payload?.latencyMs || responseTime; // Use latencyMs if available, fallback to responseTime
     const hostname = payload?.hostname || '';
-    const userAgent = payload?.userAgent || 'unknown'; // Extract userAgent
     const connectionReused = payload?.connectionReused || false; // Extract connectionReused
 
     // Record status code
@@ -341,13 +339,6 @@ export class MetricsEventListener {
         [DimensionKey.STATUS_CATEGORY]: this.getStatusCategory(statusCode)
       });
     }
-
-    // Record User Agent
-    this.recordCounter(TrafficMetrics.USER_AGENT_TOTAL, 1, {
-      [DimensionKey.USER_AGENT]: userAgent,
-      [DimensionKey.GROUP_KEY]: groupKey, // Include groupKey and orgId dimensions
-      [DimensionKey.ORG_ID]: orgId || '',
-    });
 
     // Record Connection Reuse
     if (connectionReused) {

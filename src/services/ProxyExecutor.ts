@@ -98,6 +98,7 @@ export class ProxyExecutor {
       requestId: request.id,
       groupKey: request.groupKey,
       orgId: request.orgId,
+      payload : {'targetUrl' :request.targetUrl},
       timestamp: new Date()
     });
 

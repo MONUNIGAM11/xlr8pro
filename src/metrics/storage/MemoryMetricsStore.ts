@@ -633,7 +633,7 @@ export class MemoryMetricsStore implements MetricsRepository {
   private dimensionsToKey(dimensions: Record<string, string>): string {
     return Object.entries(dimensions)
       .sort(([k1], [k2]) => k1.localeCompare(k2))
-      .map(([k, v]) => `${k}:${v}`)
+      .map(([k, v]) => `${k}::${v}`)
       .join(',');
   }
   
@@ -684,61 +684,209 @@ export class MemoryMetricsStore implements MetricsRepository {
   
   /**
    * Prepare metrics data for batch write to persistent storage
-   * @returns Array of metric records for batch writing
+   * @returns Object with arrays for each metric type, matching MongoDB schema
    */
-  prepareForBatch(): Array<{
-    name: string;
-    type: string;
-    value: number;
-    dimensions: Record<string, string>;
-    timestamp: Date;
-  }> {
-    const batchData: Array<{
-      name: string;
-      type: string;
-      value: number;
+  prepareForBatch(): {
+    counters: Array<{
+      metricName: string;
+      groupKey: string;
       dimensions: Record<string, string>;
-      timestamp: Date;
-    }> = [];
+      status?: string;
+      value: number;
+      timestamp: string;
+    }>;
+    gauges: Array<{
+      metricName: string;
+      groupKey: string;
+      dimensions: Record<string, string>;
+      value: number;
+      timestamp: string;
+    }>;
+    timers: Array<{
+      metricName: string;
+      groupKey: string;
+      dimensions: Record<string, string>;
+      value: number;
+      count: number;
+      timestamp: string;
+    }>;
+    histograms: Array<{
+      metricName: string;
+      groupKey: string;
+      dimensions: Record<string, string>;
+      count: number;
+      sum: number;
+      min: number;
+      max: number;
+      buckets: Record<string, number>;
+      samples?: number[];
+      timestamp: string;
+    }>;
+    timeSeries: Array<{
+      metricName: string;
+      groupKey: string;
+      dimensions: Record<string, string>;
+      buffer: Array<{
+        timestamp: string;
+        value: number;
+      }>;
+      capacity: number;
+      size: number;
+      head: number;
+      timestamp: string;
+    }>;
+  } {
+    const batchData = {
+      counters: [] as Array<{
+        metricName: string;
+        groupKey: string;
+        dimensions: Record<string, string>;
+        status?: string;
+        value: number;
+        timestamp: string;
+      }>,
+      gauges: [] as Array<{
+        metricName: string;
+        groupKey: string;
+        dimensions: Record<string, string>;
+        value: number;
+        timestamp: string;
+      }>,
+      timers: [] as Array<{
+        metricName: string;
+        groupKey: string;
+        dimensions: Record<string, string>;
+        value: number;
+        count: number;
+        timestamp: string;
+      }>,
+      histograms: [] as Array<{
+        metricName: string;
+        groupKey: string;
+        dimensions: Record<string, string>;
+        count: number;
+        sum: number;
+        min: number;
+        max: number;
+        buckets: Record<string, number>;
+        samples?: number[];
+        timestamp: string;
+      }>,
+      timeSeries: [] as Array<{
+        metricName: string;
+        groupKey: string;
+        dimensions: Record<string, string>;
+        buffer: Array<{
+          timestamp: string;
+          value: number;
+        }>;
+        capacity: number;
+        size: number;
+        head: number;
+        timestamp: string;
+      }>
+    };
     
     // Add counter data
-    for (const [name, counter] of this.counters.entries()) {
+    for (const [metricName, counter] of this.counters.entries()) {
       for (const { dimensions, value, timestamp } of counter.getAll()) {
-        batchData.push({
-          name,
-          type: 'counter',
-          value,
+        const groupKey = this.dimensionsToKey(dimensions);
+        batchData.counters.push({
+          metricName,
+          groupKey,
           dimensions,
-          timestamp: new Date(timestamp)
+          status: dimensions.statusCode, // Extract status if present
+          value,
+          timestamp: new Date(timestamp).toISOString()
         });
       }
     }
     
     // Add gauge data
-    for (const [name, gauge] of this.gauges.entries()) {
+    for (const [metricName, gauge] of this.gauges.entries()) {
       for (const { dimensions, value, timestamp } of gauge.getAll()) {
-        batchData.push({
-          name,
-          type: 'gauge',
-          value,
+        const groupKey = this.dimensionsToKey(dimensions);
+        batchData.gauges.push({
+          metricName,
+          groupKey,
           dimensions,
-          timestamp: new Date(timestamp)
+          value,
+          timestamp: new Date(timestamp).toISOString()
         });
       }
     }
     
-    // Add timer/histogram data
-    for (const [name, histogramMap] of this.histograms.entries()) {
+    // Add timer data (combining with counters for count tracking)
+    for (const [metricName, timer] of this.timers.entries()) {
+      for (const { dimensions, value, timestamp } of timer.getAll()) {
+        const groupKey = this.dimensionsToKey(dimensions);
+        const countKey = `${metricName}.count`;
+        const count = this.counters.get(countKey)?.get(dimensions) || 1;
+        
+        batchData.timers.push({
+          metricName,
+          groupKey,
+          dimensions,
+          value, // sum of durations
+          count,
+          timestamp: new Date(timestamp).toISOString()
+        });
+      }
+    }
+    
+    // Add histogram data
+    for (const [metricName, histogramMap] of this.histograms.entries()) {
       for (const [dimensionKey, histogram] of histogramMap.entries()) {
         const stats = histogram.getStats();
         const dimensions = this.keyToDimensions(dimensionKey);
+        const groupKey = dimensionKey;
         
-        batchData.push({
-          name,
-          type: 'histogram',
-          value: stats.avg, // Store the average as the primary value
+        // Create buckets from histogram data
+        const buckets: Record<string, number> = {};
+        // Note: You would need to implement getBuckets() method in Histogram class
+        // For now, we'll use placeholder buckets based on percentiles
+        if (stats.p50 !== undefined) buckets['50'] = stats.p50;
+        if (stats.p90 !== undefined) buckets['90'] = stats.p90;
+        if (stats.p95 !== undefined) buckets['95'] = stats.p95;
+        if (stats.p99 !== undefined) buckets['99'] = stats.p99;
+        
+        batchData.histograms.push({
+          metricName,
+          groupKey,
           dimensions,
-          timestamp: new Date(stats.lastUpdated)
+          count: stats.count,
+          sum: stats.sum,
+          min: stats.min,
+          max: stats.max,
+          buckets,
+          samples: [], // Could include raw samples if needed
+          timestamp: new Date(stats.lastUpdated || Date.now()).toISOString()
+        });
+      }
+    }
+    
+    // Add time series data
+    for (const [metricName, timeSeriesMap] of this.timeSeries.entries()) {
+      for (const [dimensionKey, circularBuffer] of timeSeriesMap.entries()) {
+        const dimensions = this.keyToDimensions(dimensionKey);
+        const groupKey = dimensionKey;
+        
+        // Get all data points from circular buffer
+        const allPoints = circularBuffer.getAll();
+        const buffer = allPoints.map(point => ({
+          timestamp: new Date(point.timestamp).toISOString(),
+          value: point.value
+        }));
+        
+        batchData.timeSeries.push({
+          metricName,
+          groupKey,
+          dimensions,
+          buffer,
+          capacity: this.timeSeriesCapacity,
+          size: allPoints.length,
+          head: 0, // CircularBuffer would need to expose this
+          timestamp: new Date().toISOString()
         });
       }
     }
@@ -754,7 +902,7 @@ export class MemoryMetricsStore implements MetricsRepository {
     if (key === '') return result;
     
     key.split(',').forEach(pair => {
-      const [k, v] = pair.split(':');
+      const [k, v] = pair.split('::');
       result[k] = v;
     });
     
@@ -794,5 +942,58 @@ export class MemoryMetricsStore implements MetricsRepository {
     return dimensionslist;
   }
   // #endregion
+  /**
+   * Reset all counters to zero but keep the structure
+   */
+  resetCounters(): void {
+    for (const [name, counter] of this.counters.entries()) {
+      counter.clear();
+    }
+  }
   
-} 
+  /**
+   * Reset all gauges (clear them completely as they represent current state)
+   */
+  resetGauges(): void {
+    this.gauges.clear();
+  }
+  
+  /**
+   * Reset all timers
+   */
+  resetTimers(): void {
+    for (const [name, timer] of this.timers.entries()) {
+      timer.clear();
+    }
+  }
+  
+  /**
+   * Reset all histograms
+   */
+  resetHistograms(): void {
+    this.histograms.clear();
+  }
+  
+  /**
+   * Reset time series after flush but keep recent data for real-time queries
+   * Only keep the last few minutes of data
+   */
+  resetTimeSeriesAfterFlush(): void {
+    const cutoffTime = Date.now() - (5 * 60 * 1000); // Keep last 5 minutes
+    
+    for (const [metricName, seriesMap] of this.timeSeries.entries()) {
+      for (const [dimensionKey, buffer] of seriesMap.entries()) {
+        // Get all points and filter to keep only recent ones
+        const allPoints = buffer.getAll();
+        const recentPoints = allPoints.filter(point => point.timestamp >= cutoffTime);
+        
+        // Create new buffer with recent data
+        const newBuffer = new CircularBuffer<TimePoint>(this.timeSeriesCapacity);
+        recentPoints.forEach(point => newBuffer.add(point));
+        
+        // Replace the old buffer
+        seriesMap.set(dimensionKey, newBuffer);
+      }
+    }
+  }
+}
